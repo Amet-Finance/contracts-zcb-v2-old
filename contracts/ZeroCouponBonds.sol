@@ -1,7 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-// 4. [Important]Add pause state for bonds contract, not only on the issuer contract, only AMET_VAULT can pause the contract
-// 3. [Discuss]Add a referral system, the address can be put before issuing, and will need to be verified by the AMET_VAULT
+/**
+ * 00000000 00    00 00000000 00000000
+ * 00    00 000  000 00          00
+ * 00    00 00 00 00 00          00
+ * 00    00 00    00 00          00
+ * 00000000 00    00 00000000    00
+ * 00    00 00    00 00          00
+ * 00    00 00    00 00          00
+ * 00    00 00    00 00000000    00
+ *
+ *
+ *
+ * @title Amet Finance ZeroCouponBondsV2
+ * @dev
+ *
+ * Author: @TheUnconstrainedMind
+ * Created: 20 Dec 2023
+ *
+ * Optional:
+ * -
+ */
 
 import {CoreTypes} from "./base/CoreTypes.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -18,7 +37,8 @@ contract ZeroCouponBonds is ERC1155 {
         RedemptionBeforeMaturity,
         InvalidAccess,
         ContractAlreadySettled,
-        InvalidAddress
+        InvalidAddress,
+        InvalidAction
     }
 
     error OperationFailed(OperationCodes code);
@@ -32,7 +52,7 @@ contract ZeroCouponBonds is ERC1155 {
     CoreTypes.TokenInfo private _investment;
     CoreTypes.TokenInfo private _interest;
 
-    /// @dev The amount that the referrer will receive
+    /// @dev The amount that the referrer will receive after the contract is settled
     uint256 private _referralCompletionBonus;
 
     /// @dev tokenId => blockNumber: the block when the bond(s) was(were) purchased
@@ -49,7 +69,7 @@ contract ZeroCouponBonds is ERC1155 {
     }
 
     modifier validAddress(address _addr) {
-        if(_addr == address(0)) revert OperationFailed(OperationCodes.InvalidAddress);
+        if (_addr == address(0)) revert OperationFailed(OperationCodes.InvalidAddress);
         _;
     }
 
@@ -146,7 +166,8 @@ contract ZeroCouponBonds is ERC1155 {
             _burn(msg.sender, bondIndex, burnCount);
             redemptionCount -= burnCount;
 
-            toBePaid += (burnCount * (blocksPassed * _interest.amount)) / _bondInfo.maturityThreshold;
+            uint256 singleBondAmount = ((blocksPassed * _interest.amount)) / _bondInfo.maturityThreshold;
+            toBePaid += (burnCount * (singleBondAmount - ((singleBondAmount * _bondInfo.earlyRedemptionFee) / 1000)));
 
             if (redemptionCount == 0) break;
         }
@@ -154,20 +175,26 @@ contract ZeroCouponBonds is ERC1155 {
         _interest.token.safeTransfer(msg.sender, toBePaid);
     }
 
-    // Only Vault functions
+    // =========== Only Vault functions ===========
 
+    /// @dev updates the vault address
+    /// @param newVault - address
     function updateVaultAddress(address newVault) external onlyVaultOwner validAddress(newVault) {
         _bondRoles.vault = newVault;
     }
 
-    // function decreasePurchaseFeePercentage(uint16 newPurchaseFeePercentage) external onlyVaultOwner {
-    //     require(newPurchaseFeePercentage < _vaultPurchaseFeePercentage);
-    //     _vaultPurchaseFeePercentage = newPurchaseFeePercentage;
-    // }
+    function decreasePurchaseFeePercentage(uint8 newPurchaseFeePercentage) external onlyVaultOwner {
+        if (_feeInfo.vaultPurchaseFeePercentage < newPurchaseFeePercentage) {
+            revert OperationFailed(OperationCodes.InvalidAction);
+        }
+        _feeInfo.vaultPurchaseFeePercentage = newPurchaseFeePercentage;
+    }
 
-    // function changeBaseURI(string memory uri) external onlyVaultOwner {
-    //     _setURI(uri);
-    // }
+    function changeBaseURI(string calldata uri) external onlyVaultOwner {
+        _setURI(uri);
+    }
+
+    // ===========================================
 
     // Only Issuer functions
 
@@ -233,35 +260,33 @@ contract ZeroCouponBonds is ERC1155 {
 
     // // ~~~~~ View only functions ~~~~~
 
-    // mapping(uint256 => uint256) private _bondPurchaseBlocks;
+    // function bondRoles() external view returns (CoreTypes.BondRoles memory) {
+    //     return _bondRoles;
+    // }
 
-    function bondRoles() external view returns (CoreTypes.BondRoles memory) {
-        return _bondRoles;
-    }
+    // function bondInfo() external view returns (CoreTypes.BondInfo memory) {
+    //     return _bondInfo;
+    // }
 
-    function bondInfo() external view returns (CoreTypes.BondInfo memory) {
-        return _bondInfo;
-    }
+    // function bondLifecycle() external view returns (CoreTypes.BondLifecycle memory) {
+    //     return _bondLifecycle;
+    // }
 
-    function bondLifecycle() external view returns (CoreTypes.BondLifecycle memory) {
-        return _bondLifecycle;
-    }
+    // function feeInfo() external view returns (CoreTypes.FeeInfo memory) {
+    //     return _feeInfo;
+    // }
 
-    function feeInfo() external view returns (CoreTypes.FeeInfo memory) {
-        return _feeInfo;
-    }
+    // function investment() external view returns (CoreTypes.TokenInfo memory) {
+    //     return _investment;
+    // }
 
-    function investment() external view returns (CoreTypes.TokenInfo memory) {
-        return _investment;
-    }
+    // function interest() external view returns (CoreTypes.TokenInfo memory) {
+    //     return _interest;
+    // }
 
-    function interest() external view returns (CoreTypes.TokenInfo memory) {
-        return _interest;
-    }
-
-    function referralCompletionBonus() external view returns (uint256) {
-        return _referralCompletionBonus;
-    }
+    // function referralCompletionBonus() external view returns (uint256) {
+    //     return _referralCompletionBonus;
+    // }
 
     function bondPurchaseBlocks(uint40[] calldata tokenIds) external view returns (uint256[] memory) {
         uint256[] memory purchasedBlocks = new uint256[](tokenIds.length);
