@@ -21,11 +21,11 @@ contract ZeroCouponBondsIssuer is Ownable {
     error MissingFee();
     error ContractPaused();
 
-    uint256 private _issuanceFee;
+    uint256 private _issuanceFee; // 1e18(1 ether)
     uint8 private _earlyRedemptionFeePercentage = 25; // fixed here, will update accordingly
-    uint8 private _vaultPurchaseFeePercentage;
-    uint8 private _referrerPurchaseFeePercentage;
-    bool private _isPaused;
+    uint8 private _vaultPurchaseFeePercentage; // 50 for 5%
+    uint8 private _referrerPurchaseFeePercentage; // 20 for 2%
+    bool private _isPaused; // false
 
     modifier notPaused() {
         if (_isPaused) revert ContractPaused();
@@ -57,11 +57,14 @@ contract ZeroCouponBondsIssuer is Ownable {
         (bool success,) = owner().call{value: _issuanceFee}("");
         if (!success) revert TransferFailed();
 
+        bool referrerExists = address(referrer) != address(0);
+        uint8 vaultPurchaseFeePercentageUpdated = referrerExists ? _vaultPurchaseFeePercentage - _referrerPurchaseFeePercentage : _vaultPurchaseFeePercentage;
+
         ZeroCouponBonds bondContract = new ZeroCouponBonds({
             _initialBondRoles: CoreTypes.BondRoles(msg.sender, referrer, owner()),
             _initialBondInfo: CoreTypes.BondInfo(total, 0, 0, 0, maturityThreshold, false, _earlyRedemptionFeePercentage),
             _initialBondLifecycle: CoreTypes.BondLifecycle(block.number, startBlock, endBlock),
-            _initialFeeInfo: CoreTypes.FeeInfo(_vaultPurchaseFeePercentage, _referrerPurchaseFeePercentage),
+            _initialFeeInfo: CoreTypes.FeeInfo(vaultPurchaseFeePercentageUpdated, _referrerPurchaseFeePercentage),
             _initialInvestment: CoreTypes.TokenInfo(0, IERC20(investmentToken), investmentTokenAmount),
             _initialInterest: CoreTypes.TokenInfo(0, IERC20(interestToken), interestTokenAmount)
         });
