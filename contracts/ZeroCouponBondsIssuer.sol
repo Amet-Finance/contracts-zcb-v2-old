@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-// 4. [Important]Add pause state for bonds contract, not only on the issuer contract, only AMET_VAULT can pause the contract
-// 3. [Discuss]Add a referral system, the address can be put before issuing, and will need to be verified by the AMET_VAULT
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -9,12 +7,30 @@ import {CoreTypes} from "./base/CoreTypes.sol";
 import {ZeroCouponBonds} from "./ZeroCouponBonds.sol";
 
 contract ZeroCouponBondsIssuer is Ownable {
+    enum FeeTypes {
+        Issuance,
+        EarlyRedemption,
+        VaultPurchase,
+        ReferrerPurchase
+    }
+
     event Issue(address indexed contractAddress);
+    event FeeChanged(FeeTypes feeType, uint256 oldFee, uint256 newFee);
+
+    error TransferFailed();
+    error MissingFee();
+    error ContractPaused();
 
     uint256 private _issuanceFee;
-    uint8 private _earlyRedemptionFee = 25; // fixed here, will update accordingly
+    uint8 private _earlyRedemptionFeePercentage = 25; // fixed here, will update accordingly
     uint8 private _vaultPurchaseFeePercentage;
     uint8 private _referrerPurchaseFeePercentage;
+    bool private _isPaused;
+
+    modifier notPaused() {
+        if (_isPaused) revert ContractPaused();
+        _;
+    }
 
     constructor(
         uint256 _initialIssuanceFee,
@@ -26,7 +42,6 @@ contract ZeroCouponBondsIssuer is Ownable {
         _referrerPurchaseFeePercentage = _initialReferrerPurchaseFeePercentage;
     }
 
-    // this function should take fee as well
     function issueBonds(
         address referrer,
         uint40 total,
@@ -37,10 +52,14 @@ contract ZeroCouponBondsIssuer is Ownable {
         uint256 investmentTokenAmount,
         address interestToken,
         uint256 interestTokenAmount
-    ) external payable {
+    ) external payable notPaused {
+        if (msg.value != _issuanceFee) revert MissingFee();
+        (bool success,) = owner().call{value: _issuanceFee}("");
+        if (!success) revert TransferFailed();
+
         ZeroCouponBonds bondContract = new ZeroCouponBonds({
             _initialBondRoles: CoreTypes.BondRoles(msg.sender, referrer, owner()),
-            _initialBondInfo: CoreTypes.BondInfo(total, 0, 0, 0, maturityThreshold, false, _earlyRedemptionFee),
+            _initialBondInfo: CoreTypes.BondInfo(total, 0, 0, 0, maturityThreshold, false, _earlyRedemptionFeePercentage),
             _initialBondLifecycle: CoreTypes.BondLifecycle(block.number, startBlock, endBlock),
             _initialFeeInfo: CoreTypes.FeeInfo(_vaultPurchaseFeePercentage, _referrerPurchaseFeePercentage),
             _initialInvestment: CoreTypes.TokenInfo(0, IERC20(investmentToken), investmentTokenAmount),
@@ -48,5 +67,25 @@ contract ZeroCouponBondsIssuer is Ownable {
         });
 
         emit Issue(address(bondContract));
+    }
+
+    function changeIssuanceFee(uint256 fee) external onlyOwner {
+        emit FeeChanged(FeeTypes.Issuance, _issuanceFee, fee);
+        _issuanceFee = fee;
+    }
+
+    function changeEarlyRedemptionFeePercentage(uint8 fee) external onlyOwner {
+        emit FeeChanged(FeeTypes.EarlyRedemption, _earlyRedemptionFeePercentage, fee);
+        _earlyRedemptionFeePercentage = fee;
+    }
+
+    function changeVaultPurchaseFeePercentage(uint8 fee) external onlyOwner {
+        emit FeeChanged(FeeTypes.VaultPurchase, _vaultPurchaseFeePercentage, fee);
+        _vaultPurchaseFeePercentage = fee;
+    }
+
+    function changeReferrerPurchaseFeePercentage(uint8 fee) external onlyOwner {
+        emit FeeChanged(FeeTypes.ReferrerPurchase, _referrerPurchaseFeePercentage, fee);
+        _referrerPurchaseFeePercentage = fee;
     }
 }

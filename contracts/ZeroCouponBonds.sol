@@ -167,7 +167,7 @@ contract ZeroCouponBonds is ERC1155 {
             redemptionCount -= burnCount;
 
             uint256 singleBondAmount = ((blocksPassed * _interest.amount)) / _bondInfo.maturityThreshold;
-            toBePaid += (burnCount * (singleBondAmount - ((singleBondAmount * _bondInfo.earlyRedemptionFee) / 1000)));
+            toBePaid += (burnCount * (singleBondAmount - ((singleBondAmount * _bondInfo.earlyRedemptionFeePercentage) / 1000)));
 
             if (redemptionCount == 0) break;
         }
