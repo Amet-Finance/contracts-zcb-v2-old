@@ -3,10 +3,18 @@ pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {CoreTypes} from "./base/CoreTypes.sol";
+
+import {IAmetVault} from "./interfaces/IAmetVault.sol";
+import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {ZeroCouponBonds} from "./ZeroCouponBonds.sol";
 
 contract ZeroCouponBondsIssuer is Ownable {
+    struct ContractPackedInfo {
+        uint8 purchaseFeePercentage;
+        uint8 earlyRedemptionFeePercentage;
+        bool isPaused;
+    }
+  
     enum FeeTypes {
         Issuance,
         EarlyRedemption,
@@ -15,80 +23,88 @@ contract ZeroCouponBondsIssuer is Ownable {
     }
 
     event Issue(address indexed contractAddress);
+    event PauseChanged(bool isPaused);
     event FeeChanged(FeeTypes feeType, uint256 oldFee, uint256 newFee);
 
     error TransferFailed();
     error MissingFee();
     error ContractPaused();
 
-    uint256 private _issuanceFee; // 1e18(1 ether)
-    uint8 private _earlyRedemptionFeePercentage = 25; // fixed here, will update accordingly
-    uint8 private _vaultPurchaseFeePercentage; // 50 for 5%
-    uint8 private _referrerPurchaseFeePercentage; // 20 for 2%
-    bool private _isPaused; // false
+    address public vault;
+    uint256 public issuanceFee;
+
+    ContractPackedInfo public contractPackedInfo;
 
     modifier notPaused() {
-        if (_isPaused) revert ContractPaused();
+        if (contractPackedInfo.isPaused) revert ContractPaused();
         _;
     }
 
     constructor(
         uint256 _initialIssuanceFee,
         uint8 _initialVaultPurchaseFeePercentage,
-        uint8 _initialReferrerPurchaseFeePercentage
+        uint8 _initialEarlyRedemptionFeePercentage
     ) Ownable(msg.sender) {
-        _issuanceFee = _initialIssuanceFee;
-        _vaultPurchaseFeePercentage = _initialVaultPurchaseFeePercentage;
-        _referrerPurchaseFeePercentage = _initialReferrerPurchaseFeePercentage;
+        issuanceFee = _initialIssuanceFee;
+        contractPackedInfo = ContractPackedInfo(_initialVaultPurchaseFeePercentage, _initialEarlyRedemptionFeePercentage, false);
     }
 
     function issueBonds(
-        address referrer,
         uint40 total,
         uint40 maturityThreshold,
-        uint256 startBlock,
-        uint256 endBlock,
         address investmentToken,
-        uint256 investmentTokenAmount,
+        uint256 investmentAmount,
         address interestToken,
-        uint256 interestTokenAmount
+        uint256 interestAmount,
+        address referrer
     ) external payable notPaused {
-        if (msg.value != _issuanceFee) revert MissingFee();
-        (bool success,) = owner().call{value: _issuanceFee}("");
+        
+        if (msg.value != issuanceFee) revert MissingFee();
+        (bool success,) = owner().call{value: issuanceFee}("");
         if (!success) revert TransferFailed();
 
-        bool referrerExists = address(referrer) != address(0);
-        uint8 vaultPurchaseFeePercentageUpdated = referrerExists ? _vaultPurchaseFeePercentage - _referrerPurchaseFeePercentage : _vaultPurchaseFeePercentage;
-
         ZeroCouponBonds bondContract = new ZeroCouponBonds({
-            _initialBondRoles: CoreTypes.BondRoles(msg.sender, referrer, owner()),
-            _initialBondInfo: CoreTypes.BondInfo(total, 0, 0, 0, maturityThreshold, false, _earlyRedemptionFeePercentage),
-            _initialBondLifecycle: CoreTypes.BondLifecycle(block.number, startBlock, endBlock),
-            _initialFeeInfo: CoreTypes.FeeInfo(vaultPurchaseFeePercentageUpdated, _referrerPurchaseFeePercentage),
-            _initialInvestment: CoreTypes.TokenInfo(0, IERC20(investmentToken), investmentTokenAmount),
-            _initialInterest: CoreTypes.TokenInfo(0, IERC20(interestToken), interestTokenAmount)
+            _initialIssuer: msg.sender,
+            _initialVault: vault,
+
+            _initialBondInfo: CoreTypes.BondInfo(total, 0, 0, 0, maturityThreshold, false, false, contractPackedInfo.purchaseFeePercentage, contractPackedInfo.earlyRedemptionFeePercentage),
+
+            _initialInvestmentToken: investmentToken,
+            _initialInvestmentAmount: investmentAmount,
+
+            _initialInterestToken: interestToken,
+            _initialInterestAmount: interestAmount
         });
+
+
+        if (address(referrer) != address(0)) {
+            IAmetVault(vault).setReferrer(address(bondContract), referrer);
+        }
 
         emit Issue(address(bondContract));
     }
 
+    function changePausedState(bool pausedState) external onlyOwner {
+        emit PauseChanged(pausedState);
+        contractPackedInfo.isPaused = pausedState;
+    }
+
     function changeIssuanceFee(uint256 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.Issuance, _issuanceFee, fee);
-        _issuanceFee = fee;
+        emit FeeChanged(FeeTypes.Issuance, issuanceFee, fee);
+        issuanceFee = fee;
     }
 
     function changeEarlyRedemptionFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.EarlyRedemption, _earlyRedemptionFeePercentage, fee);
-        _earlyRedemptionFeePercentage = fee;
+        emit FeeChanged(FeeTypes.EarlyRedemption, contractPackedInfo.earlyRedemptionFeePercentage, fee);
+        contractPackedInfo.earlyRedemptionFeePercentage = fee;
     }
 
     function changeVaultPurchaseFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.VaultPurchase, _vaultPurchaseFeePercentage, fee);
-        _vaultPurchaseFeePercentage = fee;
-    }
+        emit FeeChanged(FeeTypes.VaultPurchase, contractPackedInfo.purchaseFeePercentage, fee);
+        contractPackedInfo.purchaseFeePercentage = fee;
+    }    
 
-    function changeReferrerPurchaseFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.ReferrerPurchase, _referrerPurchaseFeePercentage, fee);
-        _referrerPurchaseFeePercentage = fee;
-    }
+    function changeVaultAddress(address newVault) external onlyOwner {
+        vault = newVault;
+    } 
 }

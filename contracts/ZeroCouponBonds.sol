@@ -22,7 +22,7 @@ pragma solidity ^0.8.20;
  * -
  */
 
-import {CoreTypes} from "./base/CoreTypes.sol";
+import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -31,8 +31,6 @@ contract ZeroCouponBonds is ERC1155 {
     using SafeERC20 for IERC20;
 
     enum OperationCodes {
-        OnlyReferrer,
-        TransferFailed,
         InsufficientLiquidity,
         RedemptionBeforeMaturity,
         InvalidAccess,
@@ -43,28 +41,22 @@ contract ZeroCouponBonds is ERC1155 {
 
     error OperationFailed(OperationCodes code);
 
-    CoreTypes.BondRoles private _bondRoles;
-    CoreTypes.BondInfo private _bondInfo;
-    CoreTypes.BondLifecycle private _bondLifecycle;
+    address public issuer;
+    address public immutable vault;
+    
+    CoreTypes.BondInfo public bondInfo;
 
-    CoreTypes.FeeInfo private _feeInfo;
+    address public immutable investmentToken;
+    uint256 public immutable investmentAmount;
 
-    CoreTypes.TokenInfo private _investment;
-    CoreTypes.TokenInfo private _interest;
-
-    /// @dev The amount that the referrer will receive after the contract is settled
-    uint256 private _referralCompletionBonus;
+    address public immutable interestToken;
+    uint256 public immutable interestAmount;
 
     /// @dev tokenId => blockNumber: the block when the bond(s) was(were) purchased
-    mapping(uint40 => uint256) private _bondPurchaseBlocks;
-
-    modifier onlyVaultOwner() {
-        if (msg.sender != _bondRoles.vault) revert CoreTypes.OnlyVaultOwner();
-        _;
-    }
+    mapping(uint40 => uint256) public _bondPurchaseBlocks;
 
     modifier onlyIssuer() {
-        if (msg.sender != _bondRoles.issuer) revert CoreTypes.OnlyIssuer();
+        if (msg.sender != issuer) revert OperationFailed(OperationCodes.InvalidAccess);
         _;
     }
 
@@ -74,65 +66,69 @@ contract ZeroCouponBonds is ERC1155 {
     }
 
     modifier notSettled() {
-        if (_bondInfo.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
+        if (bondInfo.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
         _;
     }
+    
 
     constructor(
-        CoreTypes.BondRoles memory _initialBondRoles,
+        address _initialIssuer,
+        address _initialVault,
+
         CoreTypes.BondInfo memory _initialBondInfo,
-        CoreTypes.BondLifecycle memory _initialBondLifecycle,
-        CoreTypes.FeeInfo memory _initialFeeInfo,
-        CoreTypes.TokenInfo memory _initialInvestment,
-        CoreTypes.TokenInfo memory _initialInterest
+
+        address _initialInvestmentToken,
+        uint256 _initialInvestmentAmount,
+        address _initialInterestToken,
+        uint256 _initialInterestAmount
     )
         ERC1155(string.concat("https://storage.amet.finance/7001/contracts", Strings.toHexString(address(this)), ".json"))
     {
-        _bondRoles = _initialBondRoles;
-        _bondInfo = _initialBondInfo;
-        _bondLifecycle = _initialBondLifecycle;
-        _feeInfo = _initialFeeInfo;
-        _investment = _initialInvestment;
-        _interest = _initialInterest;
+        issuer = _initialIssuer;
+        vault = _initialVault;
+        
+        bondInfo = _initialBondInfo;
+
+        investmentToken = _initialInvestmentToken;
+        investmentAmount =  _initialInvestmentAmount;
+
+        interestToken = _initialInterestToken;
+        interestAmount = _initialInterestAmount;
     }
 
     /// @dev Before calling this function, the msg.sender should update the allowance of interest token for the bond contract
     /// @param count - count of the bonds that will be purchased
     function purchase(uint256 count) external {
-        uint256 totalAmount = count * _investment.amount;
-        _investment.token.safeTransferFrom(msg.sender, address(this), totalAmount);
+        if (bondInfo.isPaused) revert OperationFailed(OperationCodes.InvalidAction);
+        
+        IERC20 investment = IERC20(investmentToken);
+        
+        uint256 totalAmount = count * investmentAmount;
+        
+        _mint(msg.sender, bondInfo.uniqueBondIndex, count, "");
+        _bondPurchaseBlocks[bondInfo.uniqueBondIndex] = block.number;
+        bondInfo.uniqueBondIndex += 1;
 
-        _mint(msg.sender, _bondInfo.uniqueBondIndex, count, "");
-        _bondPurchaseBlocks[_bondInfo.uniqueBondIndex] = block.number;
-        _bondInfo.uniqueBondIndex += 1;
+        uint256 purchaseFee = (totalAmount * bondInfo.purchaseFeePercentage) / 1000;
 
-        uint256 vaultFee = totalAmount - ((totalAmount * _feeInfo.vaultPurchaseFeePercentage) / 1000);
-        uint256 investmentAmountToAdd = totalAmount - vaultFee;
-
-        _investment.token.safeTransfer(_bondRoles.vault, vaultFee);
-
-        if (_bondRoles.referrer != address(0)) {
-            uint256 referralFee = totalAmount - ((totalAmount * _feeInfo.referrerPurchaseFeePercentage) / 1000);
-
-            _referralCompletionBonus += referralFee;
-            investmentAmountToAdd -= referralFee;
-        }
-
-        _investment.balance += investmentAmountToAdd;
+        investment.safeTransferFrom(msg.sender, vault, purchaseFee);
+        investment.safeTransferFrom(msg.sender, issuer, totalAmount - purchaseFee);
     }
 
     /// @dev The function will redeem the bonds and transfer interest tokens to the msg.sender
     /// @param bondIndexes - array of the bond Indexes
     /// @param redemptionCount  - the count of the bonds that will be redeemed
-    function redeem(uint40[] calldata bondIndexes, uint256 redemptionCount) external {
-        uint256 amountToBePaid = redemptionCount * _interest.amount;
-        if (_interest.balance < amountToBePaid) {
+    function redeem(uint40[] calldata bondIndexes, uint256 redemptionCount, bool isCapitulation) external {
+        uint256 amountToBePaid = redemptionCount * interestAmount;
+        IERC20 interest = IERC20(interestToken);
+
+        if (interest.balanceOf(address(this)) < amountToBePaid && isCapitulation == false) {
             revert OperationFailed(OperationCodes.InsufficientLiquidity);
         }
 
         for (uint40 i; i < bondIndexes.length; i++) {
             uint40 bondIndex = bondIndexes[i];
-            if (_bondPurchaseBlocks[bondIndex] + _bondInfo.maturityThreshold < block.number) {
+            if (_bondPurchaseBlocks[bondIndex] + bondInfo.maturityThreshold < block.number && isCapitulation == false) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
@@ -141,176 +137,76 @@ contract ZeroCouponBonds is ERC1155 {
             uint256 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : balanceByIndex;
             _burn(msg.sender, bondIndex, redemptionCount);
             redemptionCount -= burnCount;
+
+            if (isCapitulation) {
+                uint256 blocksPassed = block.number - _bondPurchaseBlocks[bondIndex];
+                
+                uint256 amountToBePaidOG = burnCount * interestAmount;
+                
+                uint256 bondsAmountForCapitulation = ((burnCount * blocksPassed * interestAmount)) / bondInfo.maturityThreshold;
+                uint256 feeDeducted = bondsAmountForCapitulation - ((bondsAmountForCapitulation * bondInfo.earlyRedemptionFeePercentage) /1000);
+                // 
+                amountToBePaid -= (amountToBePaidOG - feeDeducted);
+            }
+
             if (redemptionCount == 0) break;
         }
 
         if (redemptionCount != 0) {
-            revert OperationFailed(OperationCodes.InvalidAccess);
-        }
-        _interest.token.safeTransfer(msg.sender, amountToBePaid);
-    }
-
-    /// @dev Warning: Use this function only when you understand how it works
-    /// @param bondIndexes -
-    /// @param redemptionCount -
-    function capitulationRedeem(uint40[] calldata bondIndexes, uint256 redemptionCount) external {
-        uint256 toBePaid;
-
-        for (uint40 i; i < bondIndexes.length; i++) {
-            uint40 bondIndex = bondIndexes[i];
-
-            uint256 blocksPassed = block.number - _bondPurchaseBlocks[bondIndex];
-            uint256 balanceByIndex = balanceOf(msg.sender, bondIndex);
-
-            uint256 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : balanceByIndex;
-            _burn(msg.sender, bondIndex, burnCount);
-            redemptionCount -= burnCount;
-
-            uint256 singleBondAmount = ((blocksPassed * _interest.amount)) / _bondInfo.maturityThreshold;
-            toBePaid += (burnCount * (singleBondAmount - ((singleBondAmount * _bondInfo.earlyRedemptionFeePercentage) / 1000)));
-
-            if (redemptionCount == 0) break;
-        }
-
-        _interest.token.safeTransfer(msg.sender, toBePaid);
-    }
-
-    // =========== Only Vault functions ===========
-
-    /// @dev updates the vault address
-    /// @param newVault - address
-    function updateVaultAddress(address newVault) external onlyVaultOwner validAddress(newVault) {
-        _bondRoles.vault = newVault;
-    }
-
-    function decreasePurchaseFeePercentage(uint8 newPurchaseFeePercentage) external onlyVaultOwner {
-        if (_feeInfo.vaultPurchaseFeePercentage < newPurchaseFeePercentage) {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
-        _feeInfo.vaultPurchaseFeePercentage = newPurchaseFeePercentage;
-    }
 
-    function changeBaseURI(string calldata uri) external onlyVaultOwner {
-        _setURI(uri);
+        interest.safeTransfer(msg.sender, amountToBePaid);
     }
-
     // ===========================================
 
     // Only Issuer functions
 
+    /// @dev When settling contract it means that no other bond can be issued/burned and the interest amount should be equal to (total - redeemed) * interestAmount
+    /// isSettled adds the lvl of security. Bond purchasers can be sure that no other bond can be issued and the bond is totally redeemable
     function settleContract() external onlyIssuer {
-        if (((_bondInfo.total - _bondInfo.redeemed) * _interest.amount) > _interest.balance) {
+        IERC20 interest = IERC20(interestToken);
+        uint256 totalInterestRequired = (bondInfo.total - bondInfo.redeemed) * interestAmount;
+
+        if (totalInterestRequired > interest.balanceOf(address(this))) {
             revert OperationFailed(OperationCodes.InsufficientLiquidity);
         }
 
-        _bondInfo.isSettled = true;
-        _investment.token.safeTransfer(_bondRoles.referrer, _referralCompletionBonus);
+        bondInfo.isSettled = true;
     }
 
-    // function depositInterestTokens(uint256 amount) external onlyIssuer {
-    //     bool depositStatus = IERC20(_interestToken).transferFrom(
-    //         msg.sender,
-    //         address(this),
-    //         amount
-    //     );
-    //     require(depositStatus);
-    //     _interestTokenBalance += amount;
-    // }
+    /// @dev The function for depositing interest tokens
+    /// @param amount - the amount of interst tokens that need to be deposited
+    function depositInterestTokens(uint256 amount) external {
+        IERC20(interestToken).safeTransferFrom(msg.sender, address(this), amount);
+    }
 
-    // function withdrawExcessInterest(address toAddress) external onlyIssuer {
-    //     uint256 requiredAmountForTotalRedemption = (_total - _redeemed) *
-    //         _interestTokenAmount;
-    //     require(requiredAmountForTotalRedemption >= _interestTokenBalance);
+    function withdrawExcessInterest(address toAddress) external onlyIssuer {
+        uint256 requiredAmountForTotalRedemption = (bondInfo.total - bondInfo.redeemed) * interestAmount;
+        IERC20 interest = IERC20(interestToken);
 
-    //     IERC20(_interestToken).transfer(
-    //         toAddress,
-    //         _interestTokenBalance - requiredAmountForTotalRedemption
-    //     );
-    // }
 
-    // function withdrawInvestmentTokens(address toAddress, uint256 amount) external onlyIssuer {
-    //     bool withdrawStatus = IERC20(_investmentToken).transferFrom(
-    //         address(this),
-    //         toAddress,
-    //         amount
-    //     );
-    //     require(withdrawStatus);
-    //     _investmentTokenBalance -= amount;
-    // }
-
-    // function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyIssuer {
-    //     require(newMaturityThreshold < _maturityThreshold);
-    //     _maturityThreshold = newMaturityThreshold;
-    // }
-
-    // function updateIssuerAddress(address newIssuer) external onlyIssuer {
-    //     _issuer = newIssuer;
-    // }
-
-    // function expandBondSupply(uint40 count) external onlyIssuer {
-    //     _total += count;
-    // }
-
-    // function burnUnsoldBonds(uint40 count) external onlyIssuer {
-    //     uint40 updatedTotal = _total - count;
-
-    //     require(updatedTotal >= _purchased);
-    //     _total = updatedTotal;
-    // }
-
-    // // ~~~~~ View only functions ~~~~~
-
-    // function bondRoles() external view returns (CoreTypes.BondRoles memory) {
-    //     return _bondRoles;
-    // }
-
-    // function bondInfo() external view returns (CoreTypes.BondInfo memory) {
-    //     return _bondInfo;
-    // }
-
-    // function bondLifecycle() external view returns (CoreTypes.BondLifecycle memory) {
-    //     return _bondLifecycle;
-    // }
-
-    // function feeInfo() external view returns (CoreTypes.FeeInfo memory) {
-    //     return _feeInfo;
-    // }
-
-    // function investment() external view returns (CoreTypes.TokenInfo memory) {
-    //     return _investment;
-    // }
-
-    // function interest() external view returns (CoreTypes.TokenInfo memory) {
-    //     return _interest;
-    // }
-
-    // function referralCompletionBonus() external view returns (uint256) {
-    //     return _referralCompletionBonus;
-    // }
-
-    function bondPurchaseBlocks(uint40[] calldata tokenIds) external view returns (uint256[] memory) {
-        uint256[] memory purchasedBlocks = new uint256[](tokenIds.length);
-
-        for (uint256 i; i < tokenIds.length; i++) {
-            purchasedBlocks[i] = _bondPurchaseBlocks[tokenIds[i]];
+        uint256 interestBalance = interest.balanceOf(address(this));
+        if (interestBalance <= requiredAmountForTotalRedemption) {
+            revert OperationFailed(OperationCodes.InsufficientLiquidity);
         }
 
-        return purchasedBlocks;
+        interest.safeTransfer(toAddress, interestBalance - requiredAmountForTotalRedemption);
     }
 
-    function getContractSummary()
-        external
-        view
-        returns (
-            CoreTypes.BondRoles memory,
-            CoreTypes.BondInfo memory,
-            CoreTypes.BondLifecycle memory,
-            CoreTypes.FeeInfo memory,
-            CoreTypes.TokenInfo memory,
-            CoreTypes.TokenInfo memory,
-            uint256
-        )
-    {
-        return (_bondRoles, _bondInfo, _bondLifecycle, _feeInfo, _investment, _interest, _referralCompletionBonus);
+    function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyIssuer {
+        if (newMaturityThreshold >= bondInfo.maturityThreshold) revert OperationFailed(OperationCodes.InvalidAction);
+        bondInfo.maturityThreshold = newMaturityThreshold;
+    }
+
+    function updateIssuerAddress(address newIssuer) external onlyIssuer validAddress(newIssuer) {
+        issuer = newIssuer;
+    }
+
+    /// @dev updates the bond total supply, checks if you put more then was purchased
+    /// @param newTotal - new total
+    function updateBondSupply(uint40 newTotal) external onlyIssuer notSettled {
+        if(bondInfo.purchased > newTotal ) revert OperationFailed(OperationCodes.InvalidAction);
+        bondInfo.total = newTotal;
     }
 }
