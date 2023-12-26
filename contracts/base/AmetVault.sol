@@ -9,6 +9,13 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 contract AmetVault is Ownable {
     using SafeERC20 for IERC20;
     
+    enum FeeTypes {
+        ReferrerPurchase
+    }
+
+    event FeeChanged(FeeTypes feeType, uint256 oldFee, uint256 newFee);
+    event SetReferrer(address bondContract, address referrer);
+
     address private _issuerContract;
     uint8 private _referrerPurchaseFeePercentage;
 
@@ -25,8 +32,9 @@ contract AmetVault is Ownable {
     }
 
     // Referral logic
-    function setReferrer(address contractAddress, address referrer) external onlyIssuerContract {
-        _referrerByContract[contractAddress] = referrer;
+    function setReferrer(address bondContract, address referrer) external onlyIssuerContract {
+        emit SetReferrer(bondContract, referrer);
+        _referrerByContract[bondContract] = referrer;
     }
 
     function claimReferralRewards(address bondAddress) external {
@@ -38,11 +46,10 @@ contract AmetVault is Ownable {
         IZeroCouponBondsV2 bondContract = IZeroCouponBondsV2(bondAddress);
         CoreTypes.BondInfo memory bondInfo = bondContract.bondInfo();
 
-
         if(bondInfo.purchased == bondInfo.total && bondInfo.isSettled){      
             uint256 amount = ((bondInfo.purchased * bondContract.interestAmount()) * _referrerPurchaseFeePercentage) / 1000;
-            IERC20(bondContract.interestToken()).safeTransfer(referrer, amount);
             _repaymentStatuses[bondAddress][referrer] = true;
+            IERC20(bondContract.interestToken()).safeTransfer(referrer, amount);
         }
     }
 
@@ -52,7 +59,7 @@ contract AmetVault is Ownable {
 
 
     function changeReferrerPurchaseFeePercentage(uint8 fee) external onlyOwner {
-        // emit FeeChanged(FeeTypes.ReferrerPurchase, _referrerPurchaseFeePercentage, fee);
+        emit FeeChanged(FeeTypes.ReferrerPurchase, _referrerPurchaseFeePercentage, fee);
         _referrerPurchaseFeePercentage = fee;
     }
 }

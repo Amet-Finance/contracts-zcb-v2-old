@@ -122,13 +122,13 @@ contract ZeroCouponBonds is ERC1155 {
         uint256 amountToBePaid = redemptionCount * interestAmount;
         IERC20 interest = IERC20(interestToken);
 
-        if (interest.balanceOf(address(this)) < amountToBePaid && isCapitulation == false) {
+        if (interest.balanceOf(address(this)) < amountToBePaid && !isCapitulation) {
             revert OperationFailed(OperationCodes.InsufficientLiquidity);
         }
 
         for (uint40 i; i < bondIndexes.length; i++) {
             uint40 bondIndex = bondIndexes[i];
-            if (_bondPurchaseBlocks[bondIndex] + bondInfo.maturityThreshold < block.number && isCapitulation == false) {
+            if (_bondPurchaseBlocks[bondIndex] + bondInfo.maturityThreshold < block.number && !isCapitulation) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
@@ -145,7 +145,7 @@ contract ZeroCouponBonds is ERC1155 {
                 
                 uint256 bondsAmountForCapitulation = ((burnCount * blocksPassed * interestAmount)) / bondInfo.maturityThreshold;
                 uint256 feeDeducted = bondsAmountForCapitulation - ((bondsAmountForCapitulation * bondInfo.earlyRedemptionFeePercentage) /1000);
-                // 
+
                 amountToBePaid -= (amountToBePaidOG - feeDeducted);
             }
 
