@@ -29,7 +29,7 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ZeroCouponBonds is ERC1155, Ownable{
+contract ZeroCouponBonds is ERC1155, Ownable {
     using SafeERC20 for IERC20;
 
     enum OperationCodes {
@@ -67,7 +67,9 @@ contract ZeroCouponBonds is ERC1155, Ownable{
         address _initialInterestToken,
         uint256 _initialInterestAmount
     )
-        ERC1155(string.concat("https://storage.amet.finance/chainId/contracts", Strings.toHexString(address(this)), ".json")) 
+        ERC1155(
+            string.concat("https://storage.amet.finance/chainId/contracts", Strings.toHexString(address(this)), ".json")
+        )
         Ownable(_initialIssuer)
     {
         vault = _initialVault;
@@ -86,6 +88,7 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     function purchase(uint40 count, address referrer) external {
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
         if (bondInfoTmp.isPaused) revert OperationFailed(OperationCodes.InvalidAction);
+        if (bondInfoTmp.purchased + count > bondInfoTmp.total) revert OperationFailed(OperationCodes.InvalidAction);
 
         IERC20 investment = IERC20(investmentToken);
         uint256 totalAmount = count * investmentAmount;
@@ -110,7 +113,7 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     function redeem(uint40[] calldata bondIndexes, uint40 redemptionCount, bool isCapitulation) external {
         uint256 interestAmountTmp = interestAmount;
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
-        
+
         uint256 amountToBePaid = redemptionCount * interestAmountTmp;
         IERC20 interest = IERC20(interestToken);
 
@@ -130,7 +133,7 @@ contract ZeroCouponBonds is ERC1155, Ownable{
 
             uint40 balanceByIndex = uint40(balanceOf(msg.sender, bondIndex));
             uint40 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : balanceByIndex;
-            
+
             _burn(msg.sender, bondIndex, redemptionCount);
             redemptionCount -= burnCount;
 
@@ -212,8 +215,7 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     //////////////////////////////////
 
     /// @dev - returns true if contract can not issue more bonds && fully repaid the purchasers && totally purchased
-    function isSettledAndFullyPurchased() external view returns(bool) {
+    function isSettledAndFullyPurchased() external view returns (bool) {
         return bondInfo.isSettled && bondInfo.total == bondInfo.purchased;
     }
-
 }
