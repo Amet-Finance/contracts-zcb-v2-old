@@ -5,8 +5,7 @@ import {CoreTypes} from "../libraries/CoreTypes.sol";
 
 interface IZeroCouponBondsV2 {
 
-    function bondInfo() external view returns(CoreTypes.BondInfo memory);
-    function isSettled() external view returns (bool);
+    function isSettledAndFullyPurchased() external view returns (bool);
 
     function interestToken() external view returns (address);
     function interestAmount() external view returns(uint256);

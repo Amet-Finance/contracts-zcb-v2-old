@@ -3,63 +3,67 @@ pragma solidity ^0.8.20;
 
 import {CoreTypes} from "../libraries/CoreTypes.sol";
 import {IZeroCouponBondsV2} from "../interfaces/IZeroCouponBonds.sol";
+import {IZeroCouponBondsIssuerV2} from "../interfaces/IZeroCouponBondsIssuer.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract AmetVault is Ownable {
     using SafeERC20 for IERC20;
-    
-    enum FeeTypes {
-        ReferrerPurchase
+
+    struct ReferrerInfo {
+        uint40 count;
+        bool isRepaid;
     }
 
-    event FeeChanged(FeeTypes feeType, uint256 oldFee, uint256 newFee);
-    event SetReferrer(address bondContract, address referrer);
+    event ReferralPurchaseFeeChanged(uint8 fee);
+    event ReferralRecord(address bondContractAddress, address referrer, uint40 amount);
 
-    address private _issuerContract;
-    uint8 private _referrerPurchaseFeePercentage;
+    address public issuerContract;
+    uint8 private referrerPurchaseFeePercentage;
 
-    modifier onlyIssuerContract() {
-        require(msg.sender == _issuerContract);
+    mapping(address bondContract => mapping(address referrer => ReferrerInfo)) public referrers;
+
+    modifier onlyAuthorizedContracts(address bondContractAddress) {
+        require(IZeroCouponBondsIssuerV2(issuerContract).isVaildContract(bondContractAddress), "Contract is not valid");
         _;
     }
 
-    mapping(address wallet => mapping(address bond => bool isRepayed)) private _repaymentStatuses;
-    mapping(address => address) private _referrerByContract;
+    receive() external payable {}
 
     constructor(address _initialIssuerContract) Ownable(msg.sender) {
-        _issuerContract = _initialIssuerContract;
+        issuerContract = _initialIssuerContract;
     }
 
-    // Referral logic
-    function setReferrer(address bondContract, address referrer) external onlyIssuerContract {
-        emit SetReferrer(bondContract, referrer);
-        _referrerByContract[bondContract] = referrer;
+    function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) {
+        emit ReferralRecord(msg.sender, referrer, count);
+        referrers[msg.sender][referrer].count += count;
     }
 
-    function claimReferralRewards(address bondAddress) external {
-        address referrer = _referrerByContract[bondAddress];
-        require(referrer != address(0));
-        require(_repaymentStatuses[bondAddress][referrer] == false);
+    function claimReferralRewards(address bondContractAddress) external onlyAuthorizedContracts(bondContractAddress) {
+        ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
+        require(!referrer.isRepaid && referrer.count > 0);
 
+        IZeroCouponBondsV2 bondContract = IZeroCouponBondsV2(bondContractAddress);
 
-        IZeroCouponBondsV2 bondContract = IZeroCouponBondsV2(bondAddress);
-        CoreTypes.BondInfo memory bondInfo = bondContract.bondInfo();
-
-        if(bondInfo.purchased == bondInfo.total && bondInfo.isSettled){      
-            uint256 amount = ((bondInfo.purchased * bondContract.interestAmount()) * _referrerPurchaseFeePercentage) / 1000;
-            _repaymentStatuses[bondAddress][referrer] = true;
-            IERC20(bondContract.interestToken()).safeTransfer(referrer, amount);
+        if (bondContract.isSettledAndFullyPurchased()) {
+            referrer.isRepaid = true;
+            IERC20(bondContract.interestToken()).safeTransfer(
+                msg.sender, (((referrer.count * bondContract.interestAmount()) * referrerPurchaseFeePercentage) / 1000)
+            );
         }
     }
 
-    function withdraw(address token,address toAddress, uint256 amount) external onlyOwner {
+    
+    ///////////////////////////////////
+    //     Only owner functions     //
+    /////////////////////////////////
+
+    function withdrawERC20(address token, address toAddress, uint256 amount) external onlyOwner {
         IERC20(token).safeTransfer(toAddress, amount);
     }
 
-
     function changeReferrerPurchaseFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.ReferrerPurchase, _referrerPurchaseFeePercentage, fee);
-        _referrerPurchaseFeePercentage = fee;
+        emit ReferralPurchaseFeeChanged(fee);
+        referrerPurchaseFeePercentage = fee;
     }
 }

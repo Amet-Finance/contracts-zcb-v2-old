@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {ZeroCouponBonds} from "./ZeroCouponBonds.sol";
 
@@ -14,17 +13,17 @@ contract ZeroCouponBondsIssuer is Ownable {
         uint8 earlyRedemptionFeePercentage;
         bool isPaused;
     }
-  
+
     enum FeeTypes {
-        Issuance,
-        EarlyRedemption,
-        VaultPurchase,
-        ReferrerPurchase
+        IssuanceFee,
+        EarlyRedemptionFeePercentage,
+        PurchaseFeePercentage
     }
 
     event Issue(address indexed contractAddress);
+    event VaultChanged(address newVault);
     event PauseChanged(bool isPaused);
-    event FeeChanged(FeeTypes feeType, uint256 oldFee, uint256 newFee);
+    event FeeChanged(FeeTypes feeType, uint256 fee);
 
     error TransferFailed();
     error MissingFee();
@@ -32,13 +31,8 @@ contract ZeroCouponBondsIssuer is Ownable {
 
     address public vault;
     uint256 public issuanceFee;
-
     ContractPackedInfo public contractPackedInfo;
-
-    modifier notPaused() {
-        if (contractPackedInfo.isPaused) revert ContractPaused();
-        _;
-    }
+    mapping(address => bool) public issuedContracts;
 
     constructor(
         uint256 _initialIssuanceFee,
@@ -49,16 +43,16 @@ contract ZeroCouponBondsIssuer is Ownable {
         contractPackedInfo = ContractPackedInfo(_initialVaultPurchaseFeePercentage, _initialEarlyRedemptionFeePercentage, false);
     }
 
-    function issueBonds(
+    function issueBondContract(
         uint40 total,
         uint40 maturityThreshold,
         address investmentToken,
         uint256 investmentAmount,
         address interestToken,
-        uint256 interestAmount,
-        address referrer
-    ) external payable notPaused {
-        
+        uint256 interestAmount
+    ) external payable {
+        if (contractPackedInfo.isPaused) revert ContractPaused();
+
         if (msg.value != issuanceFee) revert MissingFee();
         (bool success,) = owner().call{value: issuanceFee}("");
         if (!success) revert TransferFailed();
@@ -67,7 +61,17 @@ contract ZeroCouponBondsIssuer is Ownable {
             _initialIssuer: msg.sender,
             _initialVault: vault,
 
-            _initialBondInfo: CoreTypes.BondInfo(total, 0, 0, 0, maturityThreshold, false, false, contractPackedInfo.purchaseFeePercentage, contractPackedInfo.earlyRedemptionFeePercentage),
+            _initialBondInfo: CoreTypes.BondInfo({
+                    total: total,
+                    purchased: 0,
+                    redeemed: 0,
+                    uniqueBondIndex: 0,
+                    maturityThreshold: maturityThreshold,
+                    isSettled: false,
+                    isPaused: false,
+                    purchaseFeePercentage: contractPackedInfo.purchaseFeePercentage,
+                    earlyRedemptionFeePercentage: contractPackedInfo.earlyRedemptionFeePercentage
+            }),
 
             _initialInvestmentToken: investmentToken,
             _initialInvestmentAmount: investmentAmount,
@@ -76,35 +80,39 @@ contract ZeroCouponBondsIssuer is Ownable {
             _initialInterestAmount: interestAmount
         });
 
+        address bondContractAddress = address(bondContract);
+        issuedContracts[bondContractAddress] = true;
 
-        if (address(referrer) != address(0)) {
-            IAmetVault(vault).setReferrer(address(bondContract), referrer);
-        }
-
-        emit Issue(address(bondContract));
+        emit Issue(bondContractAddress);
     }
 
-    function changePausedState(bool pausedState) external onlyOwner {
-        emit PauseChanged(pausedState);
-        contractPackedInfo.isPaused = pausedState;
+    ///////////////////////////////////
+    //     Only owner functions     //
+    /////////////////////////////////
+
+    function changePausedState(bool isPaused) external onlyOwner {
+        contractPackedInfo.isPaused = isPaused;
+        emit PauseChanged(isPaused);
     }
 
     function changeIssuanceFee(uint256 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.Issuance, issuanceFee, fee);
         issuanceFee = fee;
+        emit FeeChanged(FeeTypes.IssuanceFee, fee);
     }
 
     function changeEarlyRedemptionFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.EarlyRedemption, contractPackedInfo.earlyRedemptionFeePercentage, fee);
         contractPackedInfo.earlyRedemptionFeePercentage = fee;
+        emit FeeChanged(FeeTypes.EarlyRedemptionFeePercentage, fee);
+
     }
 
-    function changeVaultPurchaseFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.VaultPurchase, contractPackedInfo.purchaseFeePercentage, fee);
+    function changePurchaseFeePercentage(uint8 fee) external onlyOwner {
         contractPackedInfo.purchaseFeePercentage = fee;
-    }    
+        emit FeeChanged(FeeTypes.PurchaseFeePercentage, fee);
+    }
 
     function changeVaultAddress(address newVault) external onlyOwner {
+        emit VaultChanged(newVault);
         vault = newVault;
-    } 
+    }
 }

@@ -19,15 +19,17 @@ pragma solidity ^0.8.20;
  * Created: 20 Dec 2023
  *
  * Optional:
- * -
+ * - Change chainId in the _uri
  */
 
+import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ZeroCouponBonds is ERC1155 {
+contract ZeroCouponBonds is ERC1155, Ownable{
     using SafeERC20 for IERC20;
 
     enum OperationCodes {
@@ -41,9 +43,8 @@ contract ZeroCouponBonds is ERC1155 {
 
     error OperationFailed(OperationCodes code);
 
-    address public issuer;
     address public immutable vault;
-    
+
     CoreTypes.BondInfo public bondInfo;
 
     address public immutable investmentToken;
@@ -53,44 +54,26 @@ contract ZeroCouponBonds is ERC1155 {
     uint256 public immutable interestAmount;
 
     /// @dev tokenId => blockNumber: the block when the bond(s) was(were) purchased
-    mapping(uint40 => uint256) public _bondPurchaseBlocks;
-
-    modifier onlyIssuer() {
-        if (msg.sender != issuer) revert OperationFailed(OperationCodes.InvalidAccess);
-        _;
-    }
-
-    modifier validAddress(address _addr) {
-        if (_addr == address(0)) revert OperationFailed(OperationCodes.InvalidAddress);
-        _;
-    }
-
-    modifier notSettled() {
-        if (bondInfo.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
-        _;
-    }
-    
+    mapping(uint40 => uint256) public bondPurchaseBlocks;
 
     constructor(
         address _initialIssuer,
         address _initialVault,
-
         CoreTypes.BondInfo memory _initialBondInfo,
-
         address _initialInvestmentToken,
         uint256 _initialInvestmentAmount,
         address _initialInterestToken,
         uint256 _initialInterestAmount
     )
-        ERC1155(string.concat("https://storage.amet.finance/7001/contracts", Strings.toHexString(address(this)), ".json"))
+        ERC1155(string.concat("https://storage.amet.finance/chainId/contracts", Strings.toHexString(address(this)), ".json")) 
+        Ownable(_initialIssuer)
     {
-        issuer = _initialIssuer;
         vault = _initialVault;
-        
+
         bondInfo = _initialBondInfo;
 
         investmentToken = _initialInvestmentToken;
-        investmentAmount =  _initialInvestmentAmount;
+        investmentAmount = _initialInvestmentAmount;
 
         interestToken = _initialInterestToken;
         interestAmount = _initialInterestAmount;
@@ -98,29 +81,35 @@ contract ZeroCouponBonds is ERC1155 {
 
     /// @dev Before calling this function, the msg.sender should update the allowance of interest token for the bond contract
     /// @param count - count of the bonds that will be purchased
-    function purchase(uint256 count) external {
+    function purchase(uint40 count, address referrer) external {
         if (bondInfo.isPaused) revert OperationFailed(OperationCodes.InvalidAction);
-        
+
         IERC20 investment = IERC20(investmentToken);
-        
+
         uint256 totalAmount = count * investmentAmount;
-        
+
         _mint(msg.sender, bondInfo.uniqueBondIndex, count, "");
-        _bondPurchaseBlocks[bondInfo.uniqueBondIndex] = block.number;
+        bondInfo.purchased += count;
+        bondPurchaseBlocks[bondInfo.uniqueBondIndex] = block.number;
         bondInfo.uniqueBondIndex += 1;
 
         uint256 purchaseFee = (totalAmount * bondInfo.purchaseFeePercentage) / 1000;
+        if (referrer != address(0)) {
+            IAmetVault(vault).recordReferralPurchase(referrer, count);
+        }
 
         investment.safeTransferFrom(msg.sender, vault, purchaseFee);
-        investment.safeTransferFrom(msg.sender, issuer, totalAmount - purchaseFee);
+        investment.safeTransferFrom(msg.sender, owner(), totalAmount - purchaseFee);
     }
 
     /// @dev The function will redeem the bonds and transfer interest tokens to the msg.sender
     /// @param bondIndexes - array of the bond Indexes
     /// @param redemptionCount  - the count of the bonds that will be redeemed
-    function redeem(uint40[] calldata bondIndexes, uint256 redemptionCount, bool isCapitulation) external {
+    function redeem(uint40[] calldata bondIndexes, uint40 redemptionCount, bool isCapitulation) external {
         uint256 amountToBePaid = redemptionCount * interestAmount;
         IERC20 interest = IERC20(interestToken);
+
+        bondInfo.redeemed += redemptionCount;
 
         if (interest.balanceOf(address(this)) < amountToBePaid && !isCapitulation) {
             revert OperationFailed(OperationCodes.InsufficientLiquidity);
@@ -128,23 +117,27 @@ contract ZeroCouponBonds is ERC1155 {
 
         for (uint40 i; i < bondIndexes.length; i++) {
             uint40 bondIndex = bondIndexes[i];
-            if (_bondPurchaseBlocks[bondIndex] + bondInfo.maturityThreshold < block.number && !isCapitulation) {
+            uint256 purchasedBlock = bondPurchaseBlocks[bondIndex];
+
+            if (purchasedBlock + bondInfo.maturityThreshold < block.number && !isCapitulation) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
             uint256 balanceByIndex = balanceOf(msg.sender, bondIndex);
 
-            uint256 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : balanceByIndex;
+            uint40 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : uint40(balanceByIndex);
             _burn(msg.sender, bondIndex, redemptionCount);
             redemptionCount -= burnCount;
 
             if (isCapitulation) {
-                uint256 blocksPassed = block.number - _bondPurchaseBlocks[bondIndex];
-                
+                uint256 blocksPassed = block.number - purchasedBlock;
+
                 uint256 amountToBePaidOG = burnCount * interestAmount;
-                
-                uint256 bondsAmountForCapitulation = ((burnCount * blocksPassed * interestAmount)) / bondInfo.maturityThreshold;
-                uint256 feeDeducted = bondsAmountForCapitulation - ((bondsAmountForCapitulation * bondInfo.earlyRedemptionFeePercentage) /1000);
+
+                uint256 bondsAmountForCapitulation =
+                    ((burnCount * blocksPassed * interestAmount)) / bondInfo.maturityThreshold;
+                uint256 feeDeducted = bondsAmountForCapitulation
+                    - ((bondsAmountForCapitulation * bondInfo.earlyRedemptionFeePercentage) / 1000);
 
                 amountToBePaid -= (amountToBePaidOG - feeDeducted);
             }
@@ -158,13 +151,14 @@ contract ZeroCouponBonds is ERC1155 {
 
         interest.safeTransfer(msg.sender, amountToBePaid);
     }
-    // ===========================================
 
-    // Only Issuer functions
+    ////////////////////////////////////
+    //      Only Owner functions     //
+    //////////////////////////////////
 
     /// @dev When settling contract it means that no other bond can be issued/burned and the interest amount should be equal to (total - redeemed) * interestAmount
     /// isSettled adds the lvl of security. Bond purchasers can be sure that no other bond can be issued and the bond is totally redeemable
-    function settleContract() external onlyIssuer {
+    function settleContract() external onlyOwner {
         IERC20 interest = IERC20(interestToken);
         uint256 totalInterestRequired = (bondInfo.total - bondInfo.redeemed) * interestAmount;
 
@@ -181,10 +175,9 @@ contract ZeroCouponBonds is ERC1155 {
         IERC20(interestToken).safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function withdrawExcessInterest(address toAddress) external onlyIssuer {
+    function withdrawExcessInterest(address toAddress) external onlyOwner {
         uint256 requiredAmountForTotalRedemption = (bondInfo.total - bondInfo.redeemed) * interestAmount;
         IERC20 interest = IERC20(interestToken);
-
 
         uint256 interestBalance = interest.balanceOf(address(this));
         if (interestBalance <= requiredAmountForTotalRedemption) {
@@ -194,19 +187,26 @@ contract ZeroCouponBonds is ERC1155 {
         interest.safeTransfer(toAddress, interestBalance - requiredAmountForTotalRedemption);
     }
 
-    function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyIssuer {
+    function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyOwner {
         if (newMaturityThreshold >= bondInfo.maturityThreshold) revert OperationFailed(OperationCodes.InvalidAction);
         bondInfo.maturityThreshold = newMaturityThreshold;
     }
 
-    function updateIssuerAddress(address newIssuer) external onlyIssuer validAddress(newIssuer) {
-        issuer = newIssuer;
+    /// @dev updates the bond total supply, checks if you put more then was purchased
+    /// @param total - new total value
+    function updateBondSupply(uint40 total) external onlyOwner {
+        if (bondInfo.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
+        if (bondInfo.purchased > total) revert OperationFailed(OperationCodes.InvalidAction);
+        bondInfo.total = total;
     }
 
-    /// @dev updates the bond total supply, checks if you put more then was purchased
-    /// @param newTotal - new total
-    function updateBondSupply(uint40 newTotal) external onlyIssuer notSettled {
-        if(bondInfo.purchased > newTotal ) revert OperationFailed(OperationCodes.InvalidAction);
-        bondInfo.total = newTotal;
+    ////////////////////////////////////
+    //       View only functions     //
+    //////////////////////////////////
+
+    /// @dev - returns true if contract can not issue more bonds && fully repaid the purchasers && totally purchased
+    function isSettledAndFullyPurchased() external view returns(bool) {
+        return bondInfo.isSettled && bondInfo.total == bondInfo.purchased;
     }
+
 }
