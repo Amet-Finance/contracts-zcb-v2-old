@@ -24,8 +24,8 @@ pragma solidity ^0.8.20;
 
 import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
-import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -42,6 +42,8 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     }
 
     error OperationFailed(OperationCodes code);
+
+    event SettleContract();
 
     address public immutable vault;
 
@@ -82,18 +84,18 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     /// @dev Before calling this function, the msg.sender should update the allowance of interest token for the bond contract
     /// @param count - count of the bonds that will be purchased
     function purchase(uint40 count, address referrer) external {
-        if (bondInfo.isPaused) revert OperationFailed(OperationCodes.InvalidAction);
+        CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
+        if (bondInfoTmp.isPaused) revert OperationFailed(OperationCodes.InvalidAction);
 
         IERC20 investment = IERC20(investmentToken);
-
         uint256 totalAmount = count * investmentAmount;
 
-        _mint(msg.sender, bondInfo.uniqueBondIndex, count, "");
-        bondInfo.purchased += count;
-        bondPurchaseBlocks[bondInfo.uniqueBondIndex] = block.number;
-        bondInfo.uniqueBondIndex += 1;
+        _mint(msg.sender, bondInfoTmp.uniqueBondIndex, count, "");
+        bondInfoTmp.purchased += count;
+        bondPurchaseBlocks[bondInfoTmp.uniqueBondIndex] = block.number;
+        bondInfoTmp.uniqueBondIndex += 1;
 
-        uint256 purchaseFee = (totalAmount * bondInfo.purchaseFeePercentage) / 1000;
+        uint256 purchaseFee = (totalAmount * bondInfoTmp.purchaseFeePercentage) / 1000;
         if (referrer != address(0)) {
             IAmetVault(vault).recordReferralPurchase(referrer, count);
         }
@@ -106,10 +108,13 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     /// @param bondIndexes - array of the bond Indexes
     /// @param redemptionCount  - the count of the bonds that will be redeemed
     function redeem(uint40[] calldata bondIndexes, uint40 redemptionCount, bool isCapitulation) external {
-        uint256 amountToBePaid = redemptionCount * interestAmount;
+        uint256 interestAmountTmp = interestAmount;
+        CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
+        
+        uint256 amountToBePaid = redemptionCount * interestAmountTmp;
         IERC20 interest = IERC20(interestToken);
 
-        bondInfo.redeemed += redemptionCount;
+        bondInfoTmp.redeemed += redemptionCount;
 
         if (interest.balanceOf(address(this)) < amountToBePaid && !isCapitulation) {
             revert OperationFailed(OperationCodes.InsufficientLiquidity);
@@ -119,25 +124,25 @@ contract ZeroCouponBonds is ERC1155, Ownable{
             uint40 bondIndex = bondIndexes[i];
             uint256 purchasedBlock = bondPurchaseBlocks[bondIndex];
 
-            if (purchasedBlock + bondInfo.maturityThreshold < block.number && !isCapitulation) {
+            if (purchasedBlock + bondInfoTmp.maturityThreshold < block.number && !isCapitulation) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
-            uint256 balanceByIndex = balanceOf(msg.sender, bondIndex);
-
-            uint40 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : uint40(balanceByIndex);
+            uint40 balanceByIndex = uint40(balanceOf(msg.sender, bondIndex));
+            uint40 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : balanceByIndex;
+            
             _burn(msg.sender, bondIndex, redemptionCount);
             redemptionCount -= burnCount;
 
             if (isCapitulation) {
                 uint256 blocksPassed = block.number - purchasedBlock;
 
-                uint256 amountToBePaidOG = burnCount * interestAmount;
+                uint256 amountToBePaidOG = burnCount * interestAmountTmp;
 
                 uint256 bondsAmountForCapitulation =
-                    ((burnCount * blocksPassed * interestAmount)) / bondInfo.maturityThreshold;
+                    ((burnCount * blocksPassed * interestAmountTmp)) / bondInfoTmp.maturityThreshold;
                 uint256 feeDeducted = bondsAmountForCapitulation
-                    - ((bondsAmountForCapitulation * bondInfo.earlyRedemptionFeePercentage) / 1000);
+                    - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
 
                 amountToBePaid -= (amountToBePaidOG - feeDeducted);
             }
@@ -166,6 +171,7 @@ contract ZeroCouponBonds is ERC1155, Ownable{
             revert OperationFailed(OperationCodes.InsufficientLiquidity);
         }
 
+        emit SettleContract();
         bondInfo.isSettled = true;
     }
 
@@ -195,9 +201,10 @@ contract ZeroCouponBonds is ERC1155, Ownable{
     /// @dev updates the bond total supply, checks if you put more then was purchased
     /// @param total - new total value
     function updateBondSupply(uint40 total) external onlyOwner {
-        if (bondInfo.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
-        if (bondInfo.purchased > total) revert OperationFailed(OperationCodes.InvalidAction);
-        bondInfo.total = total;
+        CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
+        if (bondInfoTmp.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
+        if (bondInfoTmp.purchased > total) revert OperationFailed(OperationCodes.InvalidAction);
+        bondInfoTmp.total = total;
     }
 
     ////////////////////////////////////
