@@ -24,7 +24,7 @@ contract AmetVault is Ownable {
     mapping(address bondContract => mapping(address referrer => ReferrerInfo)) public referrers;
 
     modifier onlyAuthorizedContracts(address bondContractAddress) {
-        require(IZeroCouponBondsIssuerV2(issuerContract).isVaildContract(bondContractAddress), "Contract is not valid");
+        require(IZeroCouponBondsIssuerV2(issuerContract).issuedContracts(bondContractAddress), "Contract is not valid");
         _;
     }
 
