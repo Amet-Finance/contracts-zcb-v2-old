@@ -12,7 +12,6 @@ library CoreTypes {
         uint40 uniqueBondIndex;
         uint40 maturityThreshold;
         bool isSettled; // when this is done no other thing can be done, burn/issue and etc...
-        bool isPaused; // when this is done no other thing can be done, burn/issue and etc...
         uint8 purchaseFeePercentage; // purchase fee percentage
         uint8 earlyRedemptionFeePercentage; // fee percentage to deduct when redeemed early
     }

@@ -68,7 +68,6 @@ contract ZeroCouponBondsIssuer is Ownable {
                     uniqueBondIndex: 0,
                     maturityThreshold: maturityThreshold,
                     isSettled: false,
-                    isPaused: false,
                     purchaseFeePercentage: contractPackedInfo.purchaseFeePercentage,
                     earlyRedemptionFeePercentage: contractPackedInfo.earlyRedemptionFeePercentage
             }),

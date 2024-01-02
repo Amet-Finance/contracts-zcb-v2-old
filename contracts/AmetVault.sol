@@ -28,7 +28,9 @@ contract AmetVault is Ownable {
         _;
     }
 
-    receive() external payable {}
+    receive() external payable {
+        
+    }
 
     constructor(address _initialIssuerContract) Ownable(msg.sender) {
         issuerContract = _initialIssuerContract;

@@ -33,11 +33,8 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     using SafeERC20 for IERC20;
 
     enum OperationCodes {
-        InsufficientLiquidity,
+        InsufficientInterest,
         RedemptionBeforeMaturity,
-        InvalidAccess,
-        ContractAlreadySettled,
-        InvalidAddress,
         InvalidAction
     }
 
@@ -67,9 +64,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         address _initialInterestToken,
         uint256 _initialInterestAmount
     )
-        ERC1155(
-            string.concat("https://storage.amet.finance/chainId/contracts", Strings.toHexString(address(this)), ".json")
-        )
+        ERC1155(string.concat("https://storage.amet.finance/chainId/contracts", Strings.toHexString(address(this)), ".json"))
         Ownable(_initialIssuer)
     {
         vault = _initialVault;
@@ -87,7 +82,6 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @param count - count of the bonds that will be purchased
     function purchase(uint40 count, address referrer) external {
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
-        if (bondInfoTmp.isPaused) revert OperationFailed(OperationCodes.InvalidAction);
         if (bondInfoTmp.purchased + count > bondInfoTmp.total) revert OperationFailed(OperationCodes.InvalidAction);
 
         IERC20 investment = IERC20(investmentToken);
@@ -120,7 +114,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         bondInfoTmp.redeemed += redemptionCount;
 
         if (interest.balanceOf(address(this)) < amountToBePaid && !isCapitulation) {
-            revert OperationFailed(OperationCodes.InsufficientLiquidity);
+            revert OperationFailed(OperationCodes.InsufficientInterest);
         }
 
         for (uint40 i; i < bondIndexes.length; i++) {
@@ -171,7 +165,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         uint256 totalInterestRequired = (bondInfo.total - bondInfo.redeemed) * interestAmount;
 
         if (totalInterestRequired > interest.balanceOf(address(this))) {
-            revert OperationFailed(OperationCodes.InsufficientLiquidity);
+            revert OperationFailed(OperationCodes.InsufficientInterest);
         }
 
         emit SettleContract();
@@ -190,7 +184,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
         uint256 interestBalance = interest.balanceOf(address(this));
         if (interestBalance <= requiredAmountForTotalRedemption) {
-            revert OperationFailed(OperationCodes.InsufficientLiquidity);
+            revert OperationFailed(OperationCodes.InsufficientInterest);
         }
 
         interest.safeTransfer(toAddress, interestBalance - requiredAmountForTotalRedemption);
@@ -205,8 +199,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @param total - new total value
     function updateBondSupply(uint40 total) external onlyOwner {
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
-        if (bondInfoTmp.isSettled) revert OperationFailed(OperationCodes.ContractAlreadySettled);
-        if (bondInfoTmp.purchased > total) revert OperationFailed(OperationCodes.InvalidAction);
+        if (bondInfoTmp.isSettled || bondInfoTmp.purchased > total) revert OperationFailed(OperationCodes.InvalidAction);
         bondInfoTmp.total = total;
     }
 
