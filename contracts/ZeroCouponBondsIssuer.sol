@@ -25,7 +25,6 @@ contract ZeroCouponBondsIssuer is Ownable {
     event PauseChanged(bool isPaused);
     event FeeChanged(FeeTypes feeType, uint256 fee);
 
-    error TransferFailed();
     error MissingFee();
     error ContractPaused();
 
@@ -51,11 +50,11 @@ contract ZeroCouponBondsIssuer is Ownable {
         address interestToken,
         uint256 interestAmount
     ) external payable {
-        if (contractPackedInfo.isPaused) revert ContractPaused();
+        ContractPackedInfo memory packedInfoLocal = contractPackedInfo;
+        if (packedInfoLocal.isPaused) revert ContractPaused();
 
-        if (msg.value != issuanceFee) revert MissingFee();
         (bool success,) = owner().call{value: issuanceFee}("");
-        if (!success) revert TransferFailed();
+        if (!success) revert MissingFee();
 
         ZeroCouponBonds bondContract = new ZeroCouponBonds({
             _initialIssuer: msg.sender,
@@ -68,8 +67,8 @@ contract ZeroCouponBondsIssuer is Ownable {
                     uniqueBondIndex: 0,
                     maturityThreshold: maturityThreshold,
                     isSettled: false,
-                    purchaseFeePercentage: contractPackedInfo.purchaseFeePercentage,
-                    earlyRedemptionFeePercentage: contractPackedInfo.earlyRedemptionFeePercentage
+                    purchaseFeePercentage: packedInfoLocal.purchaseFeePercentage,
+                    earlyRedemptionFeePercentage: packedInfoLocal.earlyRedemptionFeePercentage
             }),
 
             _initialInvestmentToken: investmentToken,

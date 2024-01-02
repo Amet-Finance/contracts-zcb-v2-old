@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {IZeroCouponBondsV2} from "./interfaces/IZeroCouponBonds.sol";
 import {IZeroCouponBondsIssuerV2} from "./interfaces/IZeroCouponBondsIssuer.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -48,7 +47,7 @@ contract AmetVault is Ownable {
 
     function claimReferralRewards(address bondContractAddress) external onlyAuthorizedContracts(bondContractAddress) {
         ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
-        require(!referrer.isRepaid && referrer.count > 0);
+        require(!referrer.isRepaid && referrer.count != 0);
 
         IZeroCouponBondsV2 bondContract = IZeroCouponBondsV2(bondContractAddress);
 
