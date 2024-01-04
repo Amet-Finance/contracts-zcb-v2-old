@@ -2,9 +2,5 @@
 pragma solidity ^0.8.20;
 
 interface IZeroCouponBondsIssuerV2 {
-
-    function issuedContracts(address bondContract) external view returns(bool);
-    
+    function issuedContracts(address bondContract) external view returns (bool);
 }
-
-

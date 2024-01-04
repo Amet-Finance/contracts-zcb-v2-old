@@ -15,6 +15,13 @@ describe("ZeroCouponBondsIssuer", function () {
     initialFee: 0,
   }
 
+  async function mineBlocks(count = 1) {
+    for (let i = 0; i < count; i++) {
+      const response = await constants.provider.send("evm_mine");
+      console.log(response)
+    }
+  }
+
   before(async function () {
     const initialFee = 1e18.toString();
     const initialVaultPurchaseFeePercentage = 50;
@@ -43,7 +50,10 @@ describe("ZeroCouponBondsIssuer", function () {
     const owner = await contract.owner();
     const ownerBalanceBefore = await constants.provider.getBalance(owner);
 
-    const response = await contract.issueBondContract(100, 50, constants.tokenContract.target, 10, constants.tokenContract.target, 10, {
+    const investmentAmount = BigInt(10) * BigInt(1e18)
+    const interestAmount = BigInt(15) * BigInt(1e18)
+
+    const response = await contract.issueBondContract(100, 50, constants.tokenContract.target, investmentAmount, constants.tokenContract.target, interestAmount, {
       value: constants.initialFee
     });
 
@@ -76,7 +86,7 @@ describe("ZeroCouponBondsIssuer", function () {
     expect(difference).to.equal(BigInt(constants.initialFee / 1e18))
   });
 
-  it("Purchase Bond", async () => {
+  it("Purchase Bond and redeem", async () => {
     const [owner, random1] = await ethers.getSigners();
     const tokenContract = constants.tokenContract.connect(owner);
 
@@ -92,8 +102,33 @@ describe("ZeroCouponBondsIssuer", function () {
     await tokenWithRandom.approve(bondContract.target, BigInt(count) * BigInt(investmentAmount));
     const purchase = await bondContract.purchase(count, "0x0000000000000000000000000000000000000000");
 
+    const txReceipt = await constants.provider.getTransactionReceipt(purchase.hash);
+    const balances = {}
+    for (const log of txReceipt.logs) {
+      const decodedData = constants.bondContract.interface.parseLog({
+        topics: [...log.topics],
+        data: log.data
+      });
+
+
+      if (decodedData?.name === "TransferSingle") {
+        balances[decodedData.args.id] = decodedData.args.value;
+        // constants.bondContract = new ethers.Contract(decodedData.args.contractAddress, require('../artifacts/contracts/ZeroCouponBonds.sol/ZeroCouponBonds.json').abi, constants.provider);
+      }
+    }
+    const block1 = await constants.provider.getBlockNumber()
+    await mineBlocks(51);
+    const block2 = await constants.provider.getBlockNumber()
+    console.log(block1, block2)
 
     const bondInfo = parseBondInfo(await bondContract.bondInfo());
+
+    const interestAmount = BigInt(15) * BigInt(1e18)
+    constants.tokenContract.transfer(bondContract.target, interestAmount * BigInt(10))
+    const purchaseBlock = await bondContract.bondPurchaseBlocks(0);
+    await bondContract.redeem([0], 10, false);
+
+    const bondInfo1 = parseBondInfo(await bondContract.bondInfo());
     console.log(balanceOF)
 
   })

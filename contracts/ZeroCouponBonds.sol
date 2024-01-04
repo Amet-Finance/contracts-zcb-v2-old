@@ -42,6 +42,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
     event SettleContract();
 
+    string private constant baseUri = "https://storage.amet.finance/1/contracts" ;
     address public immutable vault;
 
     CoreTypes.BondInfo public bondInfo;
@@ -64,9 +65,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         address _initialInterestToken,
         uint256 _initialInterestAmount
     )
-        ERC1155(
-            string.concat("https://storage.amet.finance/chainId/contracts", Strings.toHexString(address(this)), ".json")
-        )
+        ERC1155(string.concat(baseUri, Strings.toHexString(address(this)), ".json"))
         Ownable(_initialIssuer)
     {
         vault = _initialVault;
@@ -83,7 +82,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @dev Before calling this function, the msg.sender should update the allowance of interest token for the bond contract
     /// @param count - count of the bonds that will be purchased
     function purchase(uint40 count, address referrer) external {
-        
+
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
         address vaultAddress = vault;
 
@@ -128,7 +127,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             uint40 bondIndex = bondIndexes[i];
             uint256 purchasedBlock = bondPurchaseBlocks[bondIndex];
 
-            if (purchasedBlock + bondInfoTmp.maturityThreshold < block.number && !isCapitulation) {
+            if (purchasedBlock + bondInfoTmp.maturityThreshold > block.number && !isCapitulation) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
@@ -183,12 +182,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         bondInfoLocal.isSettled = true;
     }
 
-    /// @dev The function for depositing interest tokens
-    /// @param amount - the amount of interst tokens that need to be deposited
-    function depositInterestTokens(uint256 amount) external {
-        IERC20(interestToken).safeTransferFrom(msg.sender, address(this), amount);
-    }
-
+    /// @dev For withdrawing the excess interest that was accidentally deposited to the contract
     function withdrawExcessInterest(address toAddress) external onlyOwner {
         CoreTypes.BondInfo memory bondInfoLocal = bondInfo;
         uint256 requiredAmountForTotalRedemption = (bondInfoLocal.total - bondInfoLocal.redeemed) * interestAmount;
@@ -216,15 +210,5 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
         bondInfoLocal.total = total;
-    }
-
-    ////////////////////////////////////
-    //       View only functions     //
-    //////////////////////////////////
-
-    /// @dev - returns true if contract can not issue more bonds && fully repaid the purchasers && totally purchased
-    function isSettledAndFullyPurchased() external view returns (bool) {
-        CoreTypes.BondInfo memory bondInfoLocal = bondInfo;
-        return bondInfoLocal.isSettled && bondInfoLocal.total == bondInfoLocal.purchased;
     }
 }

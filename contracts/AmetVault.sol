@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {IZeroCouponBondsV2} from "./interfaces/IZeroCouponBonds.sol";
 import {IZeroCouponBondsIssuerV2} from "./interfaces/IZeroCouponBondsIssuer.sol";
+import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -28,7 +29,7 @@ contract AmetVault is Ownable {
     }
 
     receive() external payable {
-        
+
     }
 
     constructor(address _initialIssuerContract) Ownable(msg.sender) {
@@ -51,7 +52,7 @@ contract AmetVault is Ownable {
 
         IZeroCouponBondsV2 bondContract = IZeroCouponBondsV2(bondContractAddress);
 
-        if (bondContract.isSettledAndFullyPurchased()) {
+        if (isSettledAndFullyPurchased(bondContract)) {
             referrer.isRepaid = true;
             IERC20(bondContract.interestToken()).safeTransfer(
                 msg.sender, (((referrer.count * bondContract.interestAmount()) * referrerPurchaseFeePercentage) / 1000)
@@ -59,7 +60,7 @@ contract AmetVault is Ownable {
         }
     }
 
-    
+
     ///////////////////////////////////
     //     Only owner functions     //
     /////////////////////////////////
@@ -71,5 +72,16 @@ contract AmetVault is Ownable {
     function changeReferrerPurchaseFeePercentage(uint8 fee) external onlyOwner {
         emit ReferralPurchaseFeeChanged(fee);
         referrerPurchaseFeePercentage = fee;
+    }
+
+
+    ////////////////////////////////////
+    //       View only functions     //
+    //////////////////////////////////
+
+    /// @dev - returns true if contract can not issue more bonds && fully repaid the purchasers && totally purchased
+    function isSettledAndFullyPurchased(IZeroCouponBondsV2 bondContract) internal view returns (bool) {
+        CoreTypes.BondInfo memory bondInfoLocal = bondContract.bondInfo();
+        return bondInfoLocal.isSettled && bondInfoLocal.total == bondInfoLocal.purchased;
     }
 }
