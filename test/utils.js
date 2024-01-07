@@ -25,8 +25,8 @@ async function deployVaultContract(issuerContract) {
     return await ethers.deployContract("AmetVault", [issuerContract]);
 }
 
-async function deployTokenContract() {
-    return await ethers.deployContract("Token", []);
+async function deployTokenContract(signer) {
+    return await ethers.deployContract("Token", [], signer);
 }
 
 module.exports = {
