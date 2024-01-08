@@ -91,9 +91,10 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         IERC20 investment = IERC20(investmentToken);
         uint256 totalAmount = count * investmentAmount;
 
-        _mint(msg.sender, bondInfoTmp.uniqueBondIndex, count, "");
         bondInfoTmp.purchased += count;
         bondPurchaseBlocks[bondInfoTmp.uniqueBondIndex] = block.number;
+
+        _mint(msg.sender, bondInfoTmp.uniqueBondIndex, count, "");
         bondInfoTmp.uniqueBondIndex += 1;
 
         uint256 purchaseFee = (totalAmount * bondInfoTmp.purchaseFeePercentage) / 1000;
@@ -109,10 +110,10 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @param bondIndexes - array of the bond Indexes
     /// @param redemptionCount  - the count of the bonds that will be redeemed
     function redeem(uint40[] calldata bondIndexes, uint40 redemptionCount, bool isCapitulation) external {
-        uint256 interestAmountLocal = interestAmount;
+        uint256 interestAmountToBePaid = interestAmount;
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
 
-        uint256 amountToBePaid = redemptionCount * interestAmountLocal;
+        uint256 amountToBePaid = redemptionCount * interestAmountToBePaid;
         IERC20 interest = IERC20(interestToken);
 
         bondInfoTmp.redeemed += redemptionCount;
@@ -140,12 +141,10 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             if (isCapitulation) {
                 uint256 blocksPassed = block.number - purchasedBlock;
 
-                uint256 amountToBePaidOG = burnCount * interestAmountLocal;
+                uint256 amountToBePaidOG = burnCount * interestAmountToBePaid;
 
-                uint256 bondsAmountForCapitulation =
-                    ((burnCount * blocksPassed * interestAmountLocal)) / bondInfoTmp.maturityThreshold;
-                uint256 feeDeducted = bondsAmountForCapitulation
-                    - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
+                uint256 bondsAmountForCapitulation = ((burnCount * blocksPassed * interestAmountToBePaid)) / bondInfoTmp.maturityThreshold;
+                uint256 feeDeducted = bondsAmountForCapitulation - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
 
                 amountToBePaid -= (amountToBePaidOG - feeDeducted);
             }
