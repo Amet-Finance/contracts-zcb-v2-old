@@ -9,8 +9,9 @@
   "scripts": {
     "compile": "npx hardhat compile",
     "test": "npm run compile && mocha",
+    "flatten": "npm run compile && npx hardhat flatten > Flattened.sol",
     "test:contracts:slither": "npm run compile && slither .",
-    "test:contracts:mythril": "npm run compile && npx hardhat flatten > Flattened.sol && myth analyze Flattened.sol && rm -rf Flattened.sol"
+    "test:contracts:mythril": "npm run flatten && myth analyze Flattened.sol && rm -rf Flattened.sol"
   },
   "keywords": [],
   "author": "",

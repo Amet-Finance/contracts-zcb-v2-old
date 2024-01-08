@@ -42,7 +42,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
     event SettleContract();
 
-    string private constant baseUri = "https://storage.amet.finance/1/contracts" ;
+    string private constant BASE_URI = "https://storage.amet.finance/1/contracts" ;
     address public immutable vault;
 
     CoreTypes.BondInfo public bondInfo;
@@ -65,7 +65,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         address _initialInterestToken,
         uint256 _initialInterestAmount
     )
-        ERC1155(string.concat(baseUri, Strings.toHexString(address(this)), ".json"))
+        ERC1155(string.concat(BASE_URI, Strings.toHexString(address(this)), ".json"))
         Ownable(_initialIssuer)
     {
         vault = _initialVault;
