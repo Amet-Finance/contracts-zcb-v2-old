@@ -95,7 +95,7 @@ describe("ZeroCouponBonds", () => {
                 throw Error('Redeemed more than could')
             })
             .catch(error => {
-                console.log(error);
+                // console.log(error);
             })
     })
 
