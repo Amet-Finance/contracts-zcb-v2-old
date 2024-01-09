@@ -3,11 +3,10 @@ const {
     deployTokenContract,
     issuerContractDefaultParams,
     mineBlocks,
-    deployVaultContract
+    deployVaultContract, assignBondContract, deployIssuerWithVaultContract, issueBondContract
 } = require("./utils");
 const {ethers} = require("hardhat");
 const {expect} = require("chai");
-const ZCB_ABI = require('../artifacts/contracts/ZeroCouponBonds.sol/ZeroCouponBonds.json').abi
 
 describe("ZeroCouponBonds", () => {
     let tokenContract;
@@ -49,63 +48,57 @@ describe("ZeroCouponBonds", () => {
     })
 
     it("Purchase Bond and Redeem", async () => {
-        const issuerContract = await deployIssuerContract();
-        issuerContract.connect(accounts.account1);
+        const {issuerContract, valutContract} = await deployIssuerWithVaultContract(undefined, accounts.account1);
 
-        const vault = await deployVaultContract(issuerContract.target);
-        await issuerContract.changeVaultAddress(vault.target);
-
-        const total = BigInt(10);
-        const maturityThreshold = BigInt(20)
-
-
-        const investmentAmount = BigInt(10) * BigInt(1e18)
-        const interestAmount = BigInt(15) * BigInt(1e18)
-
-
-        const promise = await issuerContract.issueBondContract(total, maturityThreshold, tokenContract.target, investmentAmount, tokenContract.target, interestAmount, {
-            value: issuerContractDefaultParams().initialFee
-        });
-
-        const provider = ethers.provider;
-        const txReceipt = await provider.getTransactionReceipt(promise.hash);
-
-        let bondContractTarget;
-        for (const log of txReceipt.logs) {
-            const decodedData = issuerContract.interface.parseLog({
-                topics: [...log.topics],
-                data: log.data
-            });
-
-            if (decodedData.name === "Issue") {
-                bondContractTarget = decodedData.args.contractAddress
-            }
+        const params = {
+            total: BigInt(10),
+            maturityThreshold: BigInt(20),
+            investmentToken: tokenContract.target,
+            investmentAmount: BigInt(10) * BigInt(1e18),
+            interestToken: tokenContract.target,
+            interestAmount: BigInt(15) * BigInt(1e18),
         }
+        const bondContract = await issueBondContract(issuerContract, params, accounts.account1)
 
-        let bondContract = new ethers.Contract(bondContractTarget, ZCB_ABI, provider);
+
         const purchaseCount = BigInt(10)
-
-
-        tokenContract.connect(accounts.account1)
-        await tokenContract.approve(bondContractTarget, purchaseCount * investmentAmount);
-
-
-        bondContract = bondContract.connect(accounts.account1)
-
+        await tokenContract.approve(bondContract.target, purchaseCount * params.investmentAmount);
         await bondContract.purchase(purchaseCount, ethers.ZeroAddress)
 
-        const bondInfo = await bondContract.bondInfo();
-        if (bondInfo.purchased !== purchaseCount) throw Error("Invalid Purchase")
+        // Check for purchasing more
+        await bondContract.purchase(1, ethers.ZeroAddress)
+            .then(() => {
+                throw Error('Purchased more than required')
+            })
+            .catch(error => {
+                if (!error.message.includes("OperationFailed(2)")) throw Error('Purchased more than required')
+            })
 
-        await mineBlocks(provider, bondInfo.maturityThreshold);
-        await tokenContract.transfer(bondContractTarget, purchaseCount * interestAmount);
 
+        const purchaseBondInfo = await bondContract.bondInfo();
+        if (purchaseBondInfo.purchased !== purchaseCount) throw Error("Invalid Purchase")
+
+        // mine blocks to meet maturity and transfer the amount to meet interest
+        await mineBlocks(params.maturityThreshold);
+        await tokenContract.transfer(bondContract.target, purchaseCount * params.interestAmount);
+
+        // as we purchase all the token id is 0 with balance of 10
         await bondContract.redeem([0], purchaseCount, false)
 
-        const bondInfo2 = await bondContract.bondInfo();
-        if (bondInfo2.redeemed !== purchaseCount) throw Error("Invalid Purchase")
+        const redeemBondInfo = await bondContract.bondInfo();
+        if (redeemBondInfo.redeemed !== purchaseCount) throw Error("Invalid Redeem")
 
-        expect(bondInfo2.redeemed).to.be.equal(purchaseCount)
+
+        // Check for redeeming more
+        await bondContract.redeem([0], BigInt(1), true)
+            .then(() => {
+                throw Error('Redeemed more than could')
+            })
+            .catch(error => {
+                console.log(error);
+            })
     })
 
 })
+
+
