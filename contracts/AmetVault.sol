@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import {IZeroCouponBondsV2} from "./interfaces/IZeroCouponBonds.sol";
-import {IZeroCouponBondsIssuerV2} from "./interfaces/IZeroCouponBondsIssuer.sol";
+import {IZeroCouponBonds} from "./interfaces/IZeroCouponBonds.sol";
+import {IZeroCouponBondsIssuer} from "./interfaces/IZeroCouponBondsIssuer.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -25,7 +25,7 @@ contract AmetVault is Ownable, IAmetVault {
     mapping(address bondContract => mapping(address referrer => ReferrerInfo)) public referrers;
 
     modifier onlyAuthorizedContracts(address bondContractAddress) {
-        require(IZeroCouponBondsIssuerV2(issuerContract).issuedContracts(bondContractAddress), "Contract is not valid");
+        require(IZeroCouponBondsIssuer(issuerContract).issuedContracts(bondContractAddress), "Contract is not valid");
         _;
     }
 
@@ -51,7 +51,7 @@ contract AmetVault is Ownable, IAmetVault {
         ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
         require(!referrer.isRepaid && referrer.count != 0);
 
-        IZeroCouponBondsV2 bondContract = IZeroCouponBondsV2(bondContractAddress);
+        IZeroCouponBonds bondContract = IZeroCouponBonds(bondContractAddress);
 
         if (isSettledAndFullyPurchased(bondContract)) {
             referrer.isRepaid = true;
@@ -81,7 +81,7 @@ contract AmetVault is Ownable, IAmetVault {
     //////////////////////////////////
 
     /// @dev - returns true if contract can not issue more bonds && fully repaid the purchasers && totally purchased
-    function isSettledAndFullyPurchased(IZeroCouponBondsV2 bondContract) internal view returns (bool) {
+    function isSettledAndFullyPurchased(IZeroCouponBonds bondContract) internal view returns (bool) {
         CoreTypes.BondInfo memory bondInfoLocal = bondContract.bondInfo();
         return bondInfoLocal.isSettled && bondInfoLocal.total == bondInfoLocal.purchased;
     }
