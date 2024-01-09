@@ -41,6 +41,8 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     error OperationFailed(OperationCodes code);
 
     event SettleContract();
+    event UpdateBondSupply(uint40 total);
+    event DecreaseMaturityThreshold(uint40 maturityThreshold);
 
     string private constant BASE_URI = "https://storage.amet.finance/1/contracts" ;
     address public immutable vault;
@@ -53,8 +55,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     address public immutable interestToken;
     uint256 public immutable interestAmount;
 
-    /// @dev tokenId => blockNumber: the block when the bond(s) was(were) purchased
-    mapping(uint40 => uint256) public bondPurchaseBlocks;
+    mapping(uint40 tokenId => uint256 blockNumber) public bondPurchaseBlocks;
 
     constructor(
         address _initialIssuer,
@@ -182,6 +183,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     }
 
     /// @dev For withdrawing the excess interest that was accidentally deposited to the contract
+    /// @param toAddress - the address to send the excess interest
     function withdrawExcessInterest(address toAddress) external onlyOwner {
         CoreTypes.BondInfo memory bondInfoLocal = bondInfo;
         uint256 requiredAmountForTotalRedemption = (bondInfoLocal.total - bondInfoLocal.redeemed) * interestAmount;
@@ -195,19 +197,23 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         interest.safeTransfer(toAddress, interestBalance - requiredAmountForTotalRedemption);
     }
 
+    /// @dev Decreses maturity treshold of the bond
+    /// @param newMaturityThreshold - new decreased maturity threshold 
     function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyOwner {
         CoreTypes.BondInfo storage bondInfoLocal = bondInfo;
         if (newMaturityThreshold >= bondInfoLocal.maturityThreshold) revert OperationFailed(OperationCodes.InvalidAction);
+        emit DecreaseMaturityThreshold(newMaturityThreshold);
         bondInfoLocal.maturityThreshold = newMaturityThreshold;
     }
 
-    /// @dev updates the bond total supply, checks if you put more then was purchased
+    /// @dev updates the bond total supply, checks if you put more than was purchased
     /// @param total - new total value
     function updateBondSupply(uint40 total) external onlyOwner {
         CoreTypes.BondInfo storage bondInfoLocal = bondInfo;
         if (bondInfoLocal.isSettled || bondInfoLocal.purchased > total) {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
+        emit UpdateBondSupply(total);
         bondInfoLocal.total = total;
     }
 }

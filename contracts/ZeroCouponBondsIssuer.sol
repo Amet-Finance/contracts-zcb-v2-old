@@ -89,24 +89,23 @@ contract ZeroCouponBondsIssuer is Ownable {
     /////////////////////////////////
 
     function changePausedState(bool isPaused) external onlyOwner {
-        contractPackedInfo.isPaused = isPaused;
         emit PauseChanged(isPaused);
+        contractPackedInfo.isPaused = isPaused;
     }
 
     function changeIssuanceFee(uint256 fee) external onlyOwner {
-        issuanceFee = fee;
         emit FeeChanged(FeeTypes.IssuanceFee, fee);
+        issuanceFee = fee;
     }
 
     function changeEarlyRedemptionFeePercentage(uint8 fee) external onlyOwner {
-        contractPackedInfo.earlyRedemptionFeePercentage = fee;
         emit FeeChanged(FeeTypes.EarlyRedemptionFeePercentage, fee);
-
+        contractPackedInfo.earlyRedemptionFeePercentage = fee;
     }
 
     function changePurchaseFeePercentage(uint8 fee) external onlyOwner {
-        contractPackedInfo.purchaseFeePercentage = fee;
         emit FeeChanged(FeeTypes.PurchaseFeePercentage, fee);
+        contractPackedInfo.purchaseFeePercentage = fee;
     }
 
     function changeVaultAddress(address newVault) external onlyOwner {

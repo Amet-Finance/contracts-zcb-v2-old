@@ -9,7 +9,7 @@
   "scripts": {
     "compile": "npx hardhat compile",
     "flatten": "npm run compile && npx hardhat flatten > Flattened.sol",
-    "test:mocha": "npm run compile && mocha",
+    "test": "npm run compile && mocha",
     "test:contracts:slither": "npm run compile && slither .",
     "test:contracts:mythril": "npm run flatten && myth analyze Flattened.sol && rm -rf Flattened.sol"
   },
@@ -22,7 +22,7 @@
     "hardhat": "^2.19.2"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^5.0.1",
+    "@openzeppelin/contracts": "5.0.1",
     "mocha": "^10.2.0"
   }
 }
