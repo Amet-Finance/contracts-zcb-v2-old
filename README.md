@@ -5,9 +5,9 @@
 Amet Finance's ZCBv2 (Zero-Coupon Bonds Version 2) represents our latest advancement in blockchain-based financial instruments. These contracts leverage the power and flexibility of decentralized finance (DeFi) to offer innovative bond solutions.
 
 ### Contracts
-[AmetVault.sol](contracts%2FAmetVault.sol): Contract for managing vault and referral rewards logic
-[ZeroCouponBonds.sol](contracts%2FZeroCouponBonds.sol): Contract for core bond logic
-[ZeroCouponBondsIssuer.sol](contracts%2FZeroCouponBondsIssuer.sol): Contract for issuing bond and managing high lvl variables(such as issuanceFee, purchaseFeePercentage and etc...)
+- [AmetVault.sol](contracts%2FAmetVault.sol): Contract for managing vault and referral rewards logic
+- [ZeroCouponBonds.sol](contracts%2FZeroCouponBonds.sol): Contract for core bond logic
+- [ZeroCouponBondsIssuer.sol](contracts%2FZeroCouponBondsIssuer.sol): Contract for issuing bond and managing high lvl variables(such as issuanceFee, purchaseFeePercentage and etc...)
 
 ### Interfaces
 - [IAmetVault.sol](contracts%2Finterfaces%2FIAmetVault.sol): Vault Interface
@@ -18,7 +18,7 @@ Amet Finance's ZCBv2 (Zero-Coupon Bonds Version 2) represents our latest advance
 - [CoreTypes.sol](contracts%2Flibraries%2FCoreTypes.sol): Core types for ZCB
 
 ### [Test Contracts](contracts%2Ftest-contracts)
-[Token.t.sol](contracts%2Ftest-contracts%2FToken.t.sol): Token ERC20
+- [Token.t.sol](contracts%2Ftest-contracts%2FToken.t.sol): Token ERC20
 
 
 ### Features
