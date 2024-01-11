@@ -1,9 +1,9 @@
-const {ethers} = require("hardhat");
-const {expect} = require("chai");
-const {address} = require("hardhat/internal/core/config/config-validation");
-const {randomAddress} = require("hardhat/internal/hardhat-network/provider/utils/random");
-const {zeroOutAddresses} = require("hardhat/internal/hardhat-network/stack-traces/library-utils");
-const {deployIssuerContract, issuerContractDefaultParams} = require("./utils");
+const { ethers } = require("hardhat");
+const { expect } = require("chai");
+const { address } = require("hardhat/internal/core/config/config-validation");
+const { randomAddress } = require("hardhat/internal/hardhat-network/provider/utils/random");
+const { zeroOutAddresses } = require("hardhat/internal/hardhat-network/stack-traces/library-utils");
+const { deployIssuerContract, issuerContractDefaultParams } = require("./utils");
 
 describe("ZeroCouponBondsIssuer", function () {
 
@@ -156,9 +156,9 @@ describe("ZeroCouponBondsIssuer", function () {
 
 
     await issuerContract.issueBondContract(100, 0, randomAddress().toString(), 0, randomAddress().toString(), 0)
-        .catch(error => {
-          if (error.message.includes("ContractPaused")) bondCreationFailed = true
-        })
+      .catch(error => {
+        if (error.message.includes("ContractPaused")) bondCreationFailed = true
+      })
 
 
     const isTrue = contractPackedInfo.isPaused === true && bondCreationFailed
@@ -206,6 +206,10 @@ describe("ZeroCouponBondsIssuer", function () {
 
     const newAddress = randomAddress().toString()
     await issuerContract.changeVaultAddress(newAddress);
+
+    await issuerContract.changeVaultAddress(ethers.ZeroAddress).catch(error => {
+      if (!error.message.includes("ZeroAddress")) throw Error('Zero check did not pass')
+    });
 
     const vaultNew = await issuerContract.vault();
 
