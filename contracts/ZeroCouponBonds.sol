@@ -90,7 +90,6 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         uint256 totalAmount = count * investmentAmount;
 
         uint256 purchaseFee = (totalAmount * bondInfoTmp.purchaseFeePercentage) / 1000;
-        if (referrer != address(0)) IAmetVault(vaultAddress).recordReferralPurchase(referrer, count);
 
         investment.safeTransferFrom(msg.sender, vaultAddress, purchaseFee);
         investment.safeTransferFrom(msg.sender, owner(), totalAmount - purchaseFee);
@@ -98,8 +97,9 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         bondInfoTmp.purchased += count;
         bondPurchaseBlocks[bondInfoTmp.uniqueBondIndex] = block.number;
 
-        _mint(msg.sender, bondInfoTmp.uniqueBondIndex, count, "");
-        bondInfoTmp.uniqueBondIndex += 1;
+        _mint(msg.sender, bondInfoTmp.uniqueBondIndex++, count, "");
+
+        if (referrer != address(0)) IAmetVault(vaultAddress).recordReferralPurchase(referrer, count);
     }
 
     /// @dev The function will redeem the bonds and transfer interest tokens to the msg.sender
