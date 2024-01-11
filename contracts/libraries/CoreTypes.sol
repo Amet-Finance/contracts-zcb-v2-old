@@ -3,6 +3,8 @@ pragma solidity 0.8.20;
 
 library CoreTypes {
 
+    error ZeroAddress();
+
     struct BondInfo {
         uint40 total;
         uint40 purchased;
@@ -13,4 +15,8 @@ library CoreTypes {
         uint8 purchaseFeePercentage; // purchase fee percentage
         uint8 earlyRedemptionFeePercentage; // fee percentage to deduct when redeemed early
     }
+
+    function notZeroAddress(address addr) internal pure {
+        if(addr == address(0)) revert ZeroAddress();
+    } 
 }
