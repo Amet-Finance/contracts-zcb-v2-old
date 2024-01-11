@@ -11,7 +11,8 @@
     "flatten": "npm run compile && npx hardhat flatten > Flattened.sol",
     "test": "npm run compile && mocha",
     "test:contracts:slither": "npm run compile && slither .",
-    "test:contracts:mythril": "npm run flatten && myth analyze Flattened.sol && rm -rf Flattened.sol"
+    "test:contracts:mythril": "npm run flatten && myth analyze Flattened.sol && rm -rf Flattened.sol",
+    "inheritance-graph": "slither . --print inheritance-graph && dot -Tpng inheritance-graph.dot -o inheritance-graph.png && rm -rf inheritance-graph.dot"
   },
   "keywords": [],
   "author": "",

@@ -24,6 +24,7 @@ pragma solidity 0.8.20;
 
 import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
+
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -44,7 +45,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     event UpdateBondSupply(uint40 total);
     event DecreaseMaturityThreshold(uint40 maturityThreshold);
 
-    string private constant BASE_URI = "https://storage.amet.finance/1/contracts" ;
+    string private constant BASE_URI = "https://storage.amet.finance/1/contracts";
     address public immutable vault;
 
     CoreTypes.BondInfo public bondInfo;
@@ -65,10 +66,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         uint256 _initialInvestmentAmount,
         address _initialInterestToken,
         uint256 _initialInterestAmount
-    )
-        ERC1155(string.concat(BASE_URI, Strings.toHexString(address(this)), ".json"))
-        Ownable(_initialIssuer)
-    {
+    ) ERC1155(string.concat(BASE_URI, Strings.toHexString(address(this)), ".json")) Ownable(_initialIssuer) {
         vault = _initialVault;
 
         bondInfo = _initialBondInfo;
@@ -83,7 +81,6 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @dev Before calling this function, the msg.sender should update the allowance of interest token for the bond contract
     /// @param count - count of the bonds that will be purchased
     function purchase(uint40 count, address referrer) external {
-
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
         address vaultAddress = vault;
 
@@ -99,9 +96,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         bondInfoTmp.uniqueBondIndex += 1;
 
         uint256 purchaseFee = (totalAmount * bondInfoTmp.purchaseFeePercentage) / 1000;
-        if (referrer != address(0)) {
-            IAmetVault(vaultAddress).recordReferralPurchase(referrer, count);
-        }
+        if (referrer != address(0)) IAmetVault(vaultAddress).recordReferralPurchase(referrer, count);
 
         investment.safeTransferFrom(msg.sender, vaultAddress, purchaseFee);
         investment.safeTransferFrom(msg.sender, owner(), totalAmount - purchaseFee);
@@ -144,8 +139,10 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
                 uint256 amountToBePaidOG = burnCount * interestAmountToBePaid;
 
-                uint256 bondsAmountForCapitulation = ((burnCount * blocksPassed * interestAmountToBePaid)) / bondInfoTmp.maturityThreshold;
-                uint256 feeDeducted = bondsAmountForCapitulation - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
+                uint256 bondsAmountForCapitulation =
+                    ((burnCount * blocksPassed * interestAmountToBePaid)) / bondInfoTmp.maturityThreshold;
+                uint256 feeDeducted = bondsAmountForCapitulation
+                    - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
 
                 amountToBePaid -= (amountToBePaidOG - feeDeducted);
             }
@@ -198,10 +195,12 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     }
 
     /// @dev Decreses maturity treshold of the bond
-    /// @param newMaturityThreshold - new decreased maturity threshold 
+    /// @param newMaturityThreshold - new decreased maturity threshold
     function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyOwner {
         CoreTypes.BondInfo storage bondInfoLocal = bondInfo;
-        if (newMaturityThreshold >= bondInfoLocal.maturityThreshold) revert OperationFailed(OperationCodes.InvalidAction);
+        if (newMaturityThreshold >= bondInfoLocal.maturityThreshold) {
+            revert OperationFailed(OperationCodes.InvalidAction);
+        }
         emit DecreaseMaturityThreshold(newMaturityThreshold);
         bondInfoLocal.maturityThreshold = newMaturityThreshold;
     }
