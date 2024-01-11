@@ -105,6 +105,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @dev The function will redeem the bonds and transfer interest tokens to the msg.sender
     /// @param bondIndexes - array of the bond Indexes
     /// @param redemptionCount  - the count of the bonds that will be redeemed
+    /// @param isCapitulation  - when set to true will execute capitulation redeem logic
     function redeem(uint40[] calldata bondIndexes, uint40 redemptionCount, bool isCapitulation) external {
         uint256 interestAmountToBePaid = interestAmount;
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
