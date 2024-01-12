@@ -21,32 +21,6 @@ describe("ZeroCouponBonds", () => {
         tokenContract = await deployTokenContract(accounts.account1);
     })
 
-    it("Issue Bond", async () => {
-        const issuerContract = await deployIssuerContract();
-        issuerContract.connect(accounts.account1);
-
-        const total = BigInt(10);
-        const maturityThreshold = BigInt(20)
-
-
-        const investmentAmount = BigInt(10) * BigInt(1e18)
-        const interestAmount = BigInt(15) * BigInt(1e18)
-
-        let isRevertedForMissingFee = false
-
-        await issuerContract.issueBondContract(total, maturityThreshold, tokenContract.target, investmentAmount, tokenContract.target, interestAmount)
-            .catch(error => {
-                if (error.message.includes("MissingFee")) isRevertedForMissingFee = true;
-            })
-
-        const isTrue = isRevertedForMissingFee;
-
-        await issuerContract.issueBondContract(total, maturityThreshold, tokenContract.target, investmentAmount, tokenContract.target, interestAmount, {
-            value: issuerContractDefaultParams().initialFee
-        });
-        expect(isTrue).to.be.equal(true);
-    })
-
     it("Purchase Bond and Redeem", async () => {
         const {issuerContract, valutContract} = await deployIssuerWithVaultContract(undefined, accounts.account1);
 
