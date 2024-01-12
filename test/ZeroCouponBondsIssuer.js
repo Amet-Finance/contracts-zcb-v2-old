@@ -5,7 +5,8 @@ const { deployIssuerContract, issuerContractDefaultParams } = require("./utils")
 
 describe("ZeroCouponBondsIssuer", function () {
   it("Deploy Issuer Contract", async () => {
-    await deployIssuerContract();
+    const issuerContract = await deployIssuerContract();
+    expect(issuerContract.target).to.be.properAddress;
   })
 
   it("Check Public Variables", async () => {

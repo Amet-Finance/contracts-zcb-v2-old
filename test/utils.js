@@ -21,6 +21,8 @@ async function deployIssuerWithVaultContract(params, account) {
     issuerContract.connect(account);
     const valutContract = await deployVaultContract(issuerContract.target, account);
     await issuerContract.changeVaultAddress(valutContract.target);
+    valutContract.connect(account);
+
     return {
         issuerContract,
         valutContract
