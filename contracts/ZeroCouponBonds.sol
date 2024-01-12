@@ -176,8 +176,8 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             revert OperationFailed(OperationCodes.InsufficientInterest);
         }
 
-        emit SettleContract();
         bondInfoLocal.isSettled = true;
+        emit SettleContract();
     }
 
     /// @dev For withdrawing the excess interest that was accidentally deposited to the contract
@@ -202,8 +202,8 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         if (newMaturityThreshold >= bondInfoLocal.maturityThreshold) {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
-        emit DecreaseMaturityThreshold(newMaturityThreshold);
         bondInfoLocal.maturityThreshold = newMaturityThreshold;
+        emit DecreaseMaturityThreshold(newMaturityThreshold);
     }
 
     /// @dev updates the bond total supply, checks if you put more than was purchased
@@ -213,7 +213,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         if (bondInfoLocal.isSettled || bondInfoLocal.purchased > total) {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
-        emit UpdateBondSupply(total);
         bondInfoLocal.total = total;
+        emit UpdateBondSupply(total);
     }
 }

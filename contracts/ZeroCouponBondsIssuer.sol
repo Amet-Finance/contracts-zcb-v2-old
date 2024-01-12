@@ -61,7 +61,9 @@ contract ZeroCouponBondsIssuer is Ownable {
         ContractPackedInfo memory packedInfoLocal = contractPackedInfo;
         if (packedInfoLocal.isPaused) revert ContractPaused();
 
-        (bool success,) = owner().call{value: issuanceFee}("");
+
+        address vaultAddress = vault;
+        (bool success,) = vaultAddress.call{value: issuanceFee}("");
         if (!success) revert MissingFee();
 
         CoreTypes.notZeroAddress(investmentToken);
@@ -69,7 +71,7 @@ contract ZeroCouponBondsIssuer is Ownable {
 
         ZeroCouponBonds bondContract = new ZeroCouponBonds({
             _initialIssuer: msg.sender,
-            _initialVault: vault,
+            _initialVault: vaultAddress,
 
             _initialBondInfo: CoreTypes.BondInfo({
                     total: total,
@@ -102,36 +104,36 @@ contract ZeroCouponBondsIssuer is Ownable {
     /// @dev Changes the paused state
     /// @param isPaused - bool
     function changePausedState(bool isPaused) external onlyOwner {
-        emit PauseChanged(isPaused);
         contractPackedInfo.isPaused = isPaused;
+        emit PauseChanged(isPaused);
     }
 
     /// @dev Changes the issuance fee(ETHER) for the upcoming bonds
     /// @param fee - new fee
     function changeIssuanceFee(uint256 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.IssuanceFee, fee);
         issuanceFee = fee;
+        emit FeeChanged(FeeTypes.IssuanceFee, fee);
     }
 
     /// @dev Changes the early redemption fee percentage for the upcoming bonds
     /// @param fee - new fee
     function changeEarlyRedemptionFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.EarlyRedemptionFeePercentage, fee);
         contractPackedInfo.earlyRedemptionFeePercentage = fee;
+        emit FeeChanged(FeeTypes.EarlyRedemptionFeePercentage, fee);
     }
 
     /// @dev Changes the purchase fee percentage for the upcoming bonds
     /// @param fee - new fee
     function changePurchaseFeePercentage(uint8 fee) external onlyOwner {
-        emit FeeChanged(FeeTypes.PurchaseFeePercentage, fee);
         contractPackedInfo.purchaseFeePercentage = fee;
+        emit FeeChanged(FeeTypes.PurchaseFeePercentage, fee);
     }
 
     /// @dev Changes the vault contract address
     /// @param newVault - new contract address of the new vault
     function changeVaultAddress(address newVault) external onlyOwner {
         CoreTypes.notZeroAddress(newVault);
-        emit VaultChanged(newVault);
         vault = newVault;
+        emit VaultChanged(newVault);
     }
 }
