@@ -17,6 +17,12 @@ pragma solidity 0.8.20;
  *
  * Author: @TheUnconstrainedMind
  * Created: 20 Dec 2023
+ * 
+ * 
+ * The bond contract is created in the issueBondContract(ZeroCouponBondsIssuer.sol). The lifecycle of the bond is as follows:
+ *      purchase ===> maturityPeriod ===> redeem
+ * 
+ * So you purchase bonds, wait until it gets mature, and redeem.
  *
  * Optional:
  * - Change chainId in the _uri
@@ -43,7 +49,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
     event SettleContract();
     event UpdateBondSupply(uint40 total);
-    event DecreaseMaturityThreshold(uint40 maturityThreshold);
+    event DecreaseMaturityPeriod(uint40 maturityPeriod);
 
     string private constant BASE_URI = "https://storage.amet.finance/1/contracts";
     address public immutable vault;
@@ -125,7 +131,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             uint40 bondIndex = bondIndexes[i];
             uint256 purchasedBlock = bondPurchaseBlocks[bondIndex];
 
-            if (purchasedBlock + bondInfoTmp.maturityThreshold > block.number && !isCapitulation) {
+            if (purchasedBlock + bondInfoTmp.maturityPeriod > block.number && !isCapitulation) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
@@ -141,7 +147,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
                 uint256 amountToBePaidOG = burnCount * interestAmountToBePaid;
 
                 uint256 bondsAmountForCapitulation =
-                    ((burnCount * blocksPassed * interestAmountToBePaid)) / bondInfoTmp.maturityThreshold;
+                    ((burnCount * blocksPassed * interestAmountToBePaid)) / bondInfoTmp.maturityPeriod;
                 uint256 feeDeducted = bondsAmountForCapitulation
                     - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
 
@@ -196,14 +202,14 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     }
 
     /// @dev Decreses maturity treshold of the bond
-    /// @param newMaturityThreshold - new decreased maturity threshold
-    function decreaseMaturityThreshold(uint40 newMaturityThreshold) external onlyOwner {
+    /// @param newMaturityPeriod - new decreased maturity threshold
+    function decreaseMaturityPeriod(uint40 newMaturityPeriod) external onlyOwner {
         CoreTypes.BondInfo storage bondInfoLocal = bondInfo;
-        if (newMaturityThreshold >= bondInfoLocal.maturityThreshold) {
+        if (newMaturityPeriod >= bondInfoLocal.maturityPeriod) {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
-        bondInfoLocal.maturityThreshold = newMaturityThreshold;
-        emit DecreaseMaturityThreshold(newMaturityThreshold);
+        bondInfoLocal.maturityPeriod = newMaturityPeriod;
+        emit DecreaseMaturityPeriod(newMaturityPeriod);
     }
 
     /// @dev updates the bond total supply, checks if you put more than was purchased

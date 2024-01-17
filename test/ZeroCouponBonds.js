@@ -26,7 +26,7 @@ describe("ZeroCouponBonds", () => {
 
         const params = {
             total: BigInt(10),
-            maturityThreshold: BigInt(20),
+            maturityPeriod: BigInt(20),
             investmentToken: tokenContract.target,
             investmentAmount: BigInt(10) * BigInt(1e18),
             interestToken: tokenContract.target,
@@ -53,7 +53,7 @@ describe("ZeroCouponBonds", () => {
         if (purchaseBondInfo.purchased !== purchaseCount) throw Error("Invalid Purchase")
 
         // mine blocks to meet maturity and transfer the amount to meet interest
-        await mineBlocks(params.maturityThreshold);
+        await mineBlocks(params.maturityPeriod);
         await tokenContract.transfer(bondContract.target, purchaseCount * params.interestAmount);
 
         // as we purchase all the token id is 0 with balance of 10

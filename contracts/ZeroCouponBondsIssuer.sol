@@ -45,14 +45,14 @@ contract ZeroCouponBondsIssuer is Ownable {
 
     /// @dev Issues bonds contract
     /// @param total - Total count of bonds
-    /// @param maturityThreshold - Blocks that are required to bass so the bond can become mature
+    /// @param maturityPeriod - Blocks that are required to bass so the bond can become mature
     /// @param investmentToken - The investment token
     /// @param investmentAmount - The investment amount to purchase 1 bond
     /// @param interestToken - The interest token
     /// @param investmentAmount - The interest amount that one will receive for 1 bond upon redeeming
     function issueBondContract(
         uint40 total,
-        uint40 maturityThreshold,
+        uint40 maturityPeriod,
         address investmentToken,
         uint256 investmentAmount,
         address interestToken,
@@ -78,7 +78,7 @@ contract ZeroCouponBondsIssuer is Ownable {
                     purchased: 0,
                     redeemed: 0,
                     uniqueBondIndex: 0,
-                    maturityThreshold: maturityThreshold,
+                    maturityPeriod: maturityPeriod,
                     isSettled: false,
                     purchaseFeePercentage: packedInfoLocal.purchaseFeePercentage,
                     earlyRedemptionFeePercentage: packedInfoLocal.earlyRedemptionFeePercentage

@@ -70,8 +70,8 @@ function assignBondContract(bondContractTarget, account) {
 //////////////////////////////
 
 async function issueBondContract(issuerContract, params, account) {
-    const {total, maturityThreshold, investmentToken, investmentAmount, interestToken, interestAmount} = params;
-    const promise = await issuerContract.issueBondContract(total, maturityThreshold, investmentToken, investmentAmount, interestToken, interestAmount, {
+    const {total, maturityPeriod, investmentToken, investmentAmount, interestToken, interestAmount} = params;
+    const promise = await issuerContract.issueBondContract(total, maturityPeriod, investmentToken, investmentAmount, interestToken, interestAmount, {
         value: issuerContractDefaultParams().initialFee
     });
 

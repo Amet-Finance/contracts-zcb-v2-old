@@ -143,7 +143,7 @@ describe("ZeroCouponBondsIssuer", function () {
     issuerContract.connect(owner);
 
     const total = BigInt(10);
-    const maturityThreshold = BigInt(20)
+    const maturityPeriod = BigInt(20)
 
 
     const tokenContract = randomAddress().toString()
@@ -152,14 +152,14 @@ describe("ZeroCouponBondsIssuer", function () {
 
     let isRevertedForMissingFee = false
 
-    await issuerContract.issueBondContract(total, maturityThreshold, tokenContract, investmentAmount, tokenContract, interestAmount)
+    await issuerContract.issueBondContract(total, maturityPeriod, tokenContract, investmentAmount, tokenContract, interestAmount)
         .catch(error => {
           if (error.message.includes("MissingFee")) isRevertedForMissingFee = true;
         })
 
     const isTrue = isRevertedForMissingFee;
 
-    await issuerContract.issueBondContract(total, maturityThreshold, tokenContract, investmentAmount, tokenContract, interestAmount, {
+    await issuerContract.issueBondContract(total, maturityPeriod, tokenContract, investmentAmount, tokenContract, interestAmount, {
       value: issuerContractDefaultParams().initialFee
     });
     expect(isTrue).to.be.equal(true);
