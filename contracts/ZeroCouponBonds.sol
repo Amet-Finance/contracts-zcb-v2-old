@@ -105,7 +105,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
         _mint(msg.sender, bondInfoTmp.uniqueBondIndex++, count, "");
 
-        if (referrer != address(0)) IAmetVault(vaultAddress).recordReferralPurchase(referrer, count);
+        if (referrer != address(0) && referrer != msg.sender) IAmetVault(vaultAddress).recordReferralPurchase(referrer, count);
     }
 
     /// @dev The function will redeem the bonds and transfer interest tokens to the msg.sender
