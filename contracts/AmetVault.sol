@@ -21,10 +21,13 @@ contract AmetVault is Ownable, IAmetVault {
     event ReferralRecord(address bondContractAddress, address referrer, uint40 amount);
     event ReferrerRewardClaimed(address referrer, uint256 amount);
 
+    error BlacklistAddress();
+
     address public immutable issuerContract;
     uint8 private referrerPurchaseFeePercentage;
 
     mapping(address bondContract => mapping(address referrer => ReferrerInfo)) public referrers;
+    mapping(address => uint8) public blakclistAddresses;
 
     modifier onlyAuthorizedContracts(address bondContractAddress) {
         require(IZeroCouponBondsIssuer(issuerContract).issuedContracts(bondContractAddress), "Contract is not valid");
@@ -41,10 +44,18 @@ contract AmetVault is Ownable, IAmetVault {
     //        Referral logic        //
     /////////////////////////////////
 
+    /// @dev This function blocks address for referral rewards
+    /// @param referrer - Referrer address
+    /// @param status - 0 for false, 1 for true
+    function blockAddressForReferralRewards(address referrer, uint8 status) external onlyOwner {
+        blakclistAddresses[referrer] = status;
+    }
+
     /// @dev Records referral purchase for the bond contract
     /// @param referrer - address of the referrer
     /// @param count - count of the bonds that was purchased by the referral
     function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) {
+        if (blakclistAddresses[referrer] == 1) revert BlacklistAddress();
         referrers[msg.sender][referrer].count += count;
         emit ReferralRecord(msg.sender, referrer, count);
     }
