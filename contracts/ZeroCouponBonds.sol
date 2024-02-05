@@ -130,8 +130,9 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         for (uint40 i; i < bondIndexesLength;) {
             uint40 bondIndex = bondIndexes[i];
             uint256 purchasedBlock = bondPurchaseBlocks[bondIndex];
+            bool isMature = purchasedBlock + bondInfoTmp.maturityPeriod <= block.number;
 
-            if (purchasedBlock + bondInfoTmp.maturityPeriod > block.number && !isCapitulation) {
+            if (!isMature && !isCapitulation) {
                 revert OperationFailed(OperationCodes.RedemptionBeforeMaturity);
             }
 
@@ -141,17 +142,13 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             _burn(msg.sender, bondIndex, redemptionCount);
             redemptionCount -= burnCount;
 
-            if (isCapitulation) {
-                uint256 blocksPassed = block.number - purchasedBlock;
-
-                uint256 amountToBePaidOG = burnCount * interestAmountToBePaid;
-
+            if (isCapitulation && !isMature) {
                 uint256 bondsAmountForCapitulation =
-                    ((burnCount * blocksPassed * interestAmountToBePaid)) / bondInfoTmp.maturityPeriod;
+                    ((burnCount * (block.number - purchasedBlock) * interestAmountToBePaid)) / bondInfoTmp.maturityPeriod;
                 uint256 feeDeducted = bondsAmountForCapitulation
                     - ((bondsAmountForCapitulation * bondInfoTmp.earlyRedemptionFeePercentage) / 1000);
 
-                amountToBePaid -= (amountToBePaidOG - feeDeducted);
+                amountToBePaid -= ((burnCount * interestAmountToBePaid) - feeDeducted);
             }
 
             if (redemptionCount == 0) break;
