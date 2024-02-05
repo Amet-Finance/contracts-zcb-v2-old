@@ -28,6 +28,7 @@ pragma solidity 0.8.20;
  * - Change chainId in the _uri
  */
 
+import {IZeroCouponBondsIssuer} from "./interfaces/IZeroCouponBondsIssuer.sol";
 import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 
@@ -52,7 +53,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     event DecreaseMaturityPeriod(uint40 maturityPeriod);
 
     string private constant BASE_URI = "https://storage.amet.finance/1/contracts";
-    address public immutable vault;
+    address public immutable issuerContract;
 
     CoreTypes.BondInfo public bondInfo;
 
@@ -66,14 +67,13 @@ contract ZeroCouponBonds is ERC1155, Ownable {
 
     constructor(
         address _initialIssuer,
-        address _initialVault,
         CoreTypes.BondInfo memory _initialBondInfo,
         address _initialInvestmentToken,
         uint256 _initialInvestmentAmount,
         address _initialInterestToken,
         uint256 _initialInterestAmount
     ) ERC1155(string.concat(BASE_URI, Strings.toHexString(address(this)), ".json")) Ownable(_initialIssuer) {
-        vault = _initialVault;
+        issuerContract = msg.sender;
 
         bondInfo = _initialBondInfo;
 
@@ -88,7 +88,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     /// @param count - count of the bonds that will be purchased
     function purchase(uint40 count, address referrer) external {
         CoreTypes.BondInfo storage bondInfoTmp = bondInfo;
-        address vaultAddress = vault;
+        address vaultAddress = IZeroCouponBondsIssuer(issuerContract).vault();
 
         if (bondInfoTmp.purchased + count > bondInfoTmp.total) revert OperationFailed(OperationCodes.InvalidAction);
 

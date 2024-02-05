@@ -61,9 +61,7 @@ contract ZeroCouponBondsIssuer is Ownable {
         ContractPackedInfo memory packedInfoLocal = contractPackedInfo;
         if (packedInfoLocal.isPaused) revert ContractPaused();
 
-
-        address vaultAddress = vault;
-        (bool success,) = vaultAddress.call{value: issuanceFee}("");
+        (bool success,) = vault.call{value: issuanceFee}("");
         if (!success) revert MissingFee();
 
         CoreTypes.notZeroAddress(investmentToken);
@@ -71,7 +69,6 @@ contract ZeroCouponBondsIssuer is Ownable {
 
         ZeroCouponBonds bondContract = new ZeroCouponBonds({
             _initialIssuer: msg.sender,
-            _initialVault: vaultAddress,
 
             _initialBondInfo: CoreTypes.BondInfo({
                     total: total,
