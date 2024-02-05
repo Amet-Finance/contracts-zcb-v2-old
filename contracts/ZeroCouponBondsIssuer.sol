@@ -4,6 +4,7 @@ pragma solidity 0.8.20;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {ZeroCouponBonds} from "./ZeroCouponBonds.sol";
 
@@ -26,20 +27,16 @@ contract ZeroCouponBondsIssuer is Ownable {
     event PauseChanged(bool isPaused);
     event FeeChanged(FeeTypes feeType, uint256 fee);
 
-    error MissingFee();
     error ContractPaused();
 
     address public vault;
-    uint256 public issuanceFee;
     ContractPackedInfo public contractPackedInfo;
     mapping(address bondContract => bool exists) public issuedContracts;
 
     constructor(
-        uint256 _initialIssuanceFee,
         uint8 _initialVaultPurchaseFeePercentage,
         uint8 _initialEarlyRedemptionFeePercentage
     ) Ownable(msg.sender) {
-        issuanceFee = _initialIssuanceFee;
         contractPackedInfo = ContractPackedInfo(_initialVaultPurchaseFeePercentage, _initialEarlyRedemptionFeePercentage, false);
     }
 
@@ -61,8 +58,7 @@ contract ZeroCouponBondsIssuer is Ownable {
         ContractPackedInfo memory packedInfoLocal = contractPackedInfo;
         if (packedInfoLocal.isPaused) revert ContractPaused();
 
-        (bool success,) = vault.call{value: issuanceFee}("");
-        if (!success) revert MissingFee();
+        IAmetVault(vault).depositInssuanceFee{value: msg.value}();
 
         CoreTypes.notZeroAddress(investmentToken);
         CoreTypes.notZeroAddress(interestToken);
@@ -103,13 +99,6 @@ contract ZeroCouponBondsIssuer is Ownable {
     function changePausedState(bool isPaused) external onlyOwner {
         contractPackedInfo.isPaused = isPaused;
         emit PauseChanged(isPaused);
-    }
-
-    /// @dev Changes the issuance fee(ETHER) for the upcoming bonds
-    /// @param fee - new fee
-    function changeIssuanceFee(uint256 fee) external onlyOwner {
-        issuanceFee = fee;
-        emit FeeChanged(FeeTypes.IssuanceFee, fee);
     }
 
     /// @dev Changes the early redemption fee percentage for the upcoming bonds

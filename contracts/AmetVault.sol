@@ -16,14 +16,21 @@ contract AmetVault is Ownable, IAmetVault {
         bool isRepaid;
     }
 
+    enum FeeTypes {
+        IssuanceFee,
+        ReferralPurchase
+    }
+
+    event FeeChanged(FeeTypes, uint256 fee);
     event FeesWithdrawn(address toAddress, uint256 amount, bool isERC20);
-    event ReferralPurchaseFeeChanged(uint8 fee);
     event ReferralRecord(address bondContractAddress, address referrer, uint40 amount);
     event ReferrerRewardClaimed(address referrer, uint256 amount);
 
     error BlacklistAddress();
+    error WrongIssuanceFee();
 
     address public immutable issuerContract;
+    uint256 public issuanceFee;
     uint8 private referrerPurchaseFeePercentage;
 
     mapping(address bondContract => mapping(address referrer => ReferrerInfo)) public referrers;
@@ -36,8 +43,24 @@ contract AmetVault is Ownable, IAmetVault {
 
     receive() external payable {}
 
-    constructor(address _initialIssuerContract) Ownable(msg.sender) {
+    constructor(address _initialIssuerContract, uint256 _initialIssuanceFee) Ownable(msg.sender) {
         issuerContract = _initialIssuerContract;
+        issuanceFee = _initialIssuanceFee;
+    }
+
+    ///////////////////////////////////
+    //        Fee Management        //
+    /////////////////////////////////
+
+    function depositInssuanceFee() external payable {
+        if (msg.value != issuanceFee) revert WrongIssuanceFee();
+    }
+
+    /// @dev Changes the issuance fee(ETHER) for the upcoming bonds
+    /// @param fee - new fee
+    function changeIssuanceFee(uint256 fee) external onlyOwner {
+        issuanceFee = fee;
+        emit FeeChanged(FeeTypes.IssuanceFee, fee);
     }
 
     ///////////////////////////////////
@@ -81,7 +104,6 @@ contract AmetVault is Ownable, IAmetVault {
     //     Only owner functions     //
     /////////////////////////////////
 
-    
     /// @dev Withdraws the Ether(issuance fees)
     /// @param toAddress - address to transfer token
     /// @param amount - amount to transfer
@@ -103,7 +125,7 @@ contract AmetVault is Ownable, IAmetVault {
     /// @param fee - new fee value
     function changeReferrerPurchaseFeePercentage(uint8 fee) external onlyOwner {
         referrerPurchaseFeePercentage = fee;
-        emit ReferralPurchaseFeeChanged(fee);
+        emit FeeChanged(FeeTypes.ReferralPurchase, fee);
     }
 
     ////////////////////////////////////
