@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
 import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {ZeroCouponBonds} from "./ZeroCouponBonds.sol";
 
-contract ZeroCouponBondsIssuer is Ownable {
+import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+contract ZeroCouponBondsIssuer is Ownable2Step {
     struct ContractPackedInfo {
         uint8 purchaseFeePercentage;
         uint8 earlyRedemptionFeePercentage;
@@ -33,10 +32,7 @@ contract ZeroCouponBondsIssuer is Ownable {
     ContractPackedInfo public contractPackedInfo;
     mapping(address bondContract => bool exists) public issuedContracts;
 
-    constructor(
-        uint8 _initialVaultPurchaseFeePercentage,
-        uint8 _initialEarlyRedemptionFeePercentage
-    ) Ownable(msg.sender) {
+    constructor(uint8 _initialVaultPurchaseFeePercentage, uint8 _initialEarlyRedemptionFeePercentage) Ownable(msg.sender) {
         contractPackedInfo = ContractPackedInfo(_initialVaultPurchaseFeePercentage, _initialEarlyRedemptionFeePercentage, false);
     }
 

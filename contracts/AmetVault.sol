@@ -4,11 +4,12 @@ pragma solidity 0.8.20;
 import {IZeroCouponBonds} from "./interfaces/IZeroCouponBonds.sol";
 import {IZeroCouponBondsIssuer} from "./interfaces/IZeroCouponBondsIssuer.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
-import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IAmetVault} from "./interfaces/IAmetVault.sol";
 
-contract AmetVault is Ownable, IAmetVault {
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+
+contract AmetVault is Ownable2Step, IAmetVault {
     using SafeERC20 for IERC20;
 
     struct ReferrerInfo {
