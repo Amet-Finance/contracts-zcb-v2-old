@@ -14,7 +14,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
 
     struct ReferrerInfo {
         uint40 count;
-        bool isRepaid;
+        uint8 isRepaid;
     }
 
     enum FeeTypes {
@@ -24,11 +24,13 @@ contract AmetVault is Ownable2Step, IAmetVault {
 
     event FeeChanged(FeeTypes, uint256 fee);
     event FeesWithdrawn(address toAddress, uint256 amount, bool isERC20);
-    event ReferralRecord(address bondContractAddress, address referrer, uint40 amount);
-    event ReferrerRewardClaimed(address referrer, uint256 amount);
+    event ReferralRecord(address referrer, address bondContractAddress, uint40 amount);
+    event ReferrerRewardClaimed(address referrer, address bondContractAddress, uint256 amount);
 
+    error InvalidReferralRewards();
     error BlacklistAddress();
     error WrongIssuanceFee();
+    error OnlyAuthorizedContracts();
 
     address public immutable issuerContract;
     uint256 public issuanceFee;
@@ -38,15 +40,22 @@ contract AmetVault is Ownable2Step, IAmetVault {
     mapping(address => uint8) public blakclistAddresses;
 
     modifier onlyAuthorizedContracts(address bondContractAddress) {
-        require(IZeroCouponBondsIssuer(issuerContract).issuedContracts(bondContractAddress), "Contract is not valid");
+        if (!IZeroCouponBondsIssuer(issuerContract).issuedContracts(bondContractAddress)) {
+            revert OnlyAuthorizedContracts();
+        }
         _;
     }
 
     receive() external payable {}
 
-    constructor(address _initialIssuerContract, uint256 _initialIssuanceFee) Ownable(msg.sender) {
+    constructor(
+        address _initialIssuerContract,
+        uint256 _initialIssuanceFee,
+        uint8 _initialReferrerPurchaseFeePercentage
+    ) Ownable(msg.sender) {
         issuerContract = _initialIssuerContract;
         issuanceFee = _initialIssuanceFee;
+        referrerPurchaseFeePercentage = _initialReferrerPurchaseFeePercentage;
     }
 
     ///////////////////////////////////
@@ -81,23 +90,23 @@ contract AmetVault is Ownable2Step, IAmetVault {
     function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) {
         if (blakclistAddresses[referrer] == 1) revert BlacklistAddress();
         referrers[msg.sender][referrer].count += count;
-        emit ReferralRecord(msg.sender, referrer, count);
+        emit ReferralRecord(referrer, msg.sender, count);
     }
 
     /// @dev After the bond contract is settled, referrers can claim their rewards
     /// @param bondContractAddress - the address of the bond contract
     function claimReferralRewards(address bondContractAddress) external onlyAuthorizedContracts(bondContractAddress) {
         ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
-        require(!referrer.isRepaid && referrer.count != 0);
+        if (referrer.isRepaid == 1 || referrer.count == 0) revert InvalidReferralRewards();
 
         IZeroCouponBonds bondContract = IZeroCouponBonds(bondContractAddress);
 
         if (isSettledAndFullyPurchased(bondContract)) {
-            referrer.isRepaid = true;
+            referrer.isRepaid = 1;
             uint256 rewardAmount =
                 (((referrer.count * bondContract.interestAmount()) * referrerPurchaseFeePercentage) / 1000);
             IERC20(bondContract.interestToken()).safeTransfer(msg.sender, rewardAmount);
-            emit ReferrerRewardClaimed(msg.sender, rewardAmount);
+            emit ReferrerRewardClaimed(msg.sender, bondContractAddress, rewardAmount);
         }
     }
 

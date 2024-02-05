@@ -5,14 +5,14 @@ import {IAmetVault} from "./interfaces/IAmetVault.sol";
 import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {ZeroCouponBonds} from "./ZeroCouponBonds.sol";
 
-import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract ZeroCouponBondsIssuer is Ownable2Step {
+contract ZeroCouponBondsIssuer is Ownable {
     struct ContractPackedInfo {
         uint8 purchaseFeePercentage;
         uint8 earlyRedemptionFeePercentage;
-        bool isPaused;
+        uint8 isPaused; // 0 - False | 1 - True
     }
 
     enum FeeTypes {
@@ -23,7 +23,7 @@ contract ZeroCouponBondsIssuer is Ownable2Step {
 
     event Issue(address indexed contractAddress);
     event VaultChanged(address newVault);
-    event PauseChanged(bool isPaused);
+    event PauseChanged(uint8 isPaused);
     event FeeChanged(FeeTypes feeType, uint256 fee);
 
     error ContractPaused();
@@ -33,7 +33,7 @@ contract ZeroCouponBondsIssuer is Ownable2Step {
     mapping(address bondContract => bool exists) public issuedContracts;
 
     constructor(uint8 _initialVaultPurchaseFeePercentage, uint8 _initialEarlyRedemptionFeePercentage) Ownable(msg.sender) {
-        contractPackedInfo = ContractPackedInfo(_initialVaultPurchaseFeePercentage, _initialEarlyRedemptionFeePercentage, false);
+        contractPackedInfo = ContractPackedInfo(_initialVaultPurchaseFeePercentage, _initialEarlyRedemptionFeePercentage, 0);
     }
 
     /// @dev Issues bonds contract
@@ -52,7 +52,7 @@ contract ZeroCouponBondsIssuer is Ownable2Step {
         uint256 interestAmount
     ) external payable {
         ContractPackedInfo memory packedInfoLocal = contractPackedInfo;
-        if (packedInfoLocal.isPaused) revert ContractPaused();
+        if (packedInfoLocal.isPaused == 1) revert ContractPaused();
 
         IAmetVault(vault).depositInssuanceFee{value: msg.value}();
 
@@ -91,8 +91,8 @@ contract ZeroCouponBondsIssuer is Ownable2Step {
     /////////////////////////////////
 
     /// @dev Changes the paused state
-    /// @param isPaused - bool
-    function changePausedState(bool isPaused) external onlyOwner {
+    /// @param isPaused - 0 for False, 1 for True
+    function changePausedState(uint8 isPaused) external onlyOwner {
         contractPackedInfo.isPaused = isPaused;
         emit PauseChanged(isPaused);
     }

@@ -35,15 +35,16 @@ import {CoreTypes} from "./libraries/CoreTypes.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ZeroCouponBonds is ERC1155, Ownable2Step {
+contract ZeroCouponBonds is ERC1155, Ownable {
     using SafeERC20 for IERC20;
 
     enum OperationCodes {
         InsufficientInterest,
         RedemptionBeforeMaturity,
-        InvalidAction
+        InvalidAction,
+        RenouncingOwnership
     }
 
     error OperationFailed(OperationCodes code);
@@ -186,6 +187,7 @@ contract ZeroCouponBonds is ERC1155, Ownable2Step {
     /// @dev For withdrawing the excess interest that was accidentally deposited to the contract
     /// @param toAddress - the address to send the excess interest
     function withdrawExcessInterest(address toAddress) external onlyOwner {
+        CoreTypes.notZeroAddress(toAddress);
         CoreTypes.BondInfo memory bondInfoLocal = bondInfo;
         uint256 requiredAmountForTotalRedemption = (bondInfoLocal.total - bondInfoLocal.redeemed) * interestAmount;
         IERC20 interest = IERC20(interestToken);
@@ -219,4 +221,9 @@ contract ZeroCouponBonds is ERC1155, Ownable2Step {
         bondInfoLocal.total = total;
         emit UpdateBondSupply(total);
     }
+
+    function renounceOwnership() public view override onlyOwner { 
+        revert OperationFailed(OperationCodes.RenouncingOwnership);
+    }
 }
+
