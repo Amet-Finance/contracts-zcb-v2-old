@@ -212,10 +212,11 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     }
 
     /// @dev updates the bond total supply, checks if you put more than was purchased
+    /// if the bond is settled, you only can decrease the supply
     /// @param total - new total value
     function updateBondSupply(uint40 total) external onlyOwner {
         CoreTypes.BondInfo storage bondInfoLocal = bondInfo;
-        if (bondInfoLocal.isSettled || bondInfoLocal.purchased > total) {
+        if (bondInfoLocal.purchased > total || (bondInfoLocal.isSettled && total > bondInfoLocal.total)) {
             revert OperationFailed(OperationCodes.InvalidAction);
         }
         bondInfoLocal.total = total;
