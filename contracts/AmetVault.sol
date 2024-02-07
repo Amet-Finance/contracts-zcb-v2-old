@@ -46,6 +46,11 @@ contract AmetVault is Ownable2Step, IAmetVault {
         _;
     }
 
+    modifier notBlakclistedReferrer(address referrer) {
+        if (blakclistAddresses[referrer] == 1) revert BlacklistAddress();
+        _;
+    }
+
     receive() external payable {}
 
     constructor(
@@ -77,7 +82,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
     //        Referral logic        //
     /////////////////////////////////
 
-    /// @dev This function blocks address for referral rewards
+    /// @dev This function blocks address for referral rewards permanently
     /// @param referrer - Referrer address
     /// @param status - 0 for false, 1 for true
     function blockAddressForReferralRewards(address referrer, uint8 status) external onlyOwner {
@@ -87,15 +92,14 @@ contract AmetVault is Ownable2Step, IAmetVault {
     /// @dev Records referral purchase for the bond contract
     /// @param referrer - address of the referrer
     /// @param count - count of the bonds that was purchased by the referral
-    function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) {
-        if (blakclistAddresses[referrer] == 1) revert BlacklistAddress();
+    function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) notBlakclistedReferrer(referrer) {
         referrers[msg.sender][referrer].count += count;
         emit ReferralRecord(referrer, msg.sender, count);
     }
 
     /// @dev After the bond contract is settled, referrers can claim their rewards
     /// @param bondContractAddress - the address of the bond contract
-    function claimReferralRewards(address bondContractAddress) external onlyAuthorizedContracts(bondContractAddress) {
+    function claimReferralRewards(address bondContractAddress) external onlyAuthorizedContracts(bondContractAddress) notBlakclistedReferrer(msg.sender) {
         ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
         if (referrer.isRepaid == 1 || referrer.count == 0) revert InvalidReferralRewards();
 
@@ -103,9 +107,8 @@ contract AmetVault is Ownable2Step, IAmetVault {
 
         if (isSettledAndFullyPurchased(bondContract)) {
             referrer.isRepaid = 1;
-            uint256 rewardAmount =
-                (((referrer.count * bondContract.interestAmount()) * referrerPurchaseFeePercentage) / 1000);
-            IERC20(bondContract.interestToken()).safeTransfer(msg.sender, rewardAmount);
+            uint256 rewardAmount = (((referrer.count * bondContract.investmentAmount()) * referrerPurchaseFeePercentage) / 1000);
+            IERC20(bondContract.investmentToken()).safeTransfer(msg.sender, rewardAmount);
             emit ReferrerRewardClaimed(msg.sender, bondContractAddress, rewardAmount);
         }
     }
