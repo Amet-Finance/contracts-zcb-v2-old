@@ -22,6 +22,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
         ReferralPurchase
     }
 
+    event BlockAddressForReferralRewards(address referrer, uint8 isBlocked);
     event FeeChanged(FeeTypes, uint256 fee);
     event FeesWithdrawn(address toAddress, uint256 amount, bool isERC20);
     event ReferralRecord(address referrer, address bondContractAddress, uint40 amount);
@@ -87,19 +88,24 @@ contract AmetVault is Ownable2Step, IAmetVault {
     /// @param status - 0 for false, 1 for true
     function blockAddressForReferralRewards(address referrer, uint8 status) external onlyOwner {
         blakclistAddresses[referrer] = status;
+        emit BlockAddressForReferralRewards(referrer, status);
     }
 
     /// @dev Records referral purchase for the bond contract
     /// @param referrer - address of the referrer
     /// @param count - count of the bonds that was purchased by the referral
-    function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) notBlakclistedReferrer(referrer) {
+    function recordReferralPurchase(address referrer, uint40 count) external onlyAuthorizedContracts(msg.sender) {
         referrers[msg.sender][referrer].count += count;
         emit ReferralRecord(referrer, msg.sender, count);
     }
 
     /// @dev After the bond contract is settled, referrers can claim their rewards
     /// @param bondContractAddress - the address of the bond contract
-    function claimReferralRewards(address bondContractAddress) external onlyAuthorizedContracts(bondContractAddress) notBlakclistedReferrer(msg.sender) {
+    function claimReferralRewards(address bondContractAddress)
+        external
+        onlyAuthorizedContracts(bondContractAddress)
+        notBlakclistedReferrer(msg.sender)
+    {
         ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
         if (referrer.isRepaid == 1 || referrer.count == 0) revert InvalidReferralRewards();
 
@@ -107,7 +113,8 @@ contract AmetVault is Ownable2Step, IAmetVault {
 
         if (isSettledAndFullyPurchased(bondContract)) {
             referrer.isRepaid = 1;
-            uint256 rewardAmount = (((referrer.count * bondContract.investmentAmount()) * referrerPurchaseFeePercentage) / 1000);
+            uint256 rewardAmount =
+                (((referrer.count * bondContract.investmentAmount()) * referrerPurchaseFeePercentage) / 1000);
             IERC20(bondContract.investmentToken()).safeTransfer(msg.sender, rewardAmount);
             emit ReferrerRewardClaimed(msg.sender, bondContractAddress, rewardAmount);
         }
