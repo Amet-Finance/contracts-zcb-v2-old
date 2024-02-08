@@ -22,7 +22,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
         ReferralPurchase
     }
 
-    event BlockAddressForReferralRewards(address referrer, uint8 isBlocked);
+    event BlockAddressForReferralRewards(address referrer, uint8 status);
     event FeeChanged(FeeTypes, uint256 fee);
     event FeesWithdrawn(address toAddress, uint256 amount, bool isERC20);
     event ReferralRecord(address referrer, address bondContractAddress, uint40 amount);
@@ -38,7 +38,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
     uint8 private referrerPurchaseFeePercentage;
 
     mapping(address bondContract => mapping(address referrer => ReferrerInfo)) public referrers;
-    mapping(address => uint8) public blakclistAddresses;
+    mapping(address => uint8) public blacklistAddresses;
 
     modifier onlyAuthorizedContracts(address bondContractAddress) {
         if (!IZeroCouponBondsIssuer(issuerContract).issuedContracts(bondContractAddress)) {
@@ -47,8 +47,8 @@ contract AmetVault is Ownable2Step, IAmetVault {
         _;
     }
 
-    modifier notBlakclistedReferrer(address referrer) {
-        if (blakclistAddresses[referrer] == 1) revert BlacklistAddress();
+    modifier notBlacklistedReferrer(address referrer) {
+        if (blacklistAddresses[referrer] == 1) revert BlacklistAddress();
         _;
     }
 
@@ -87,7 +87,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
     /// @param referrer - Referrer address
     /// @param status - 0 for false, 1 for true
     function blockAddressForReferralRewards(address referrer, uint8 status) external onlyOwner {
-        blakclistAddresses[referrer] = status;
+        blacklistAddresses[referrer] = status;
         emit BlockAddressForReferralRewards(referrer, status);
     }
 
@@ -104,7 +104,7 @@ contract AmetVault is Ownable2Step, IAmetVault {
     function claimReferralRewards(address bondContractAddress)
         external
         onlyAuthorizedContracts(bondContractAddress)
-        notBlakclistedReferrer(msg.sender)
+        notBlacklistedReferrer(msg.sender)
     {
         ReferrerInfo storage referrer = referrers[bondContractAddress][msg.sender];
         if (referrer.isRepaid == 1 || referrer.count == 0) revert InvalidReferralRewards();
