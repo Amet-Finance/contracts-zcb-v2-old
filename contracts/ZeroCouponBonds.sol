@@ -17,11 +17,11 @@ pragma solidity 0.8.20;
  *
  * Author: @TheUnconstrainedMind
  * Created: 20 Dec 2023
- * 
- * 
+ *
+ *
  * The bond contract is created in the issueBondContract(ZeroCouponBondsIssuer.sol). The lifecycle of the bond is as follows:
  *      purchase ===> maturityPeriod ===> redeem
- * 
+ *
  * So you purchase bonds, wait until it gets mature, and redeem.
  *
  * Optional:
@@ -53,7 +53,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
     event UpdateBondSupply(uint40 total);
     event DecreaseMaturityPeriod(uint40 maturityPeriod);
 
-    string private constant BASE_URI = "https://storage.amet.finance/1/contracts";
+    string private constant BASE_URI = "https://storage.amet.finance/contracts";
     address public immutable issuerContract;
 
     CoreTypes.BondInfo public bondInfo;
@@ -73,7 +73,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         uint256 _initialInvestmentAmount,
         address _initialInterestToken,
         uint256 _initialInterestAmount
-    ) ERC1155(string.concat(BASE_URI, Strings.toHexString(address(this)), ".json")) Ownable(_initialIssuer) {
+    ) ERC1155(string.concat(BASE_URI, Strings.toHexString(address(this)), "_8001.json")) Ownable(_initialIssuer) {
         issuerContract = msg.sender;
 
         bondInfo = _initialBondInfo;
@@ -223,7 +223,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
         emit UpdateBondSupply(total);
     }
 
-    function renounceOwnership() public view override onlyOwner { 
+    function renounceOwnership() public view override onlyOwner {
         revert OperationFailed(OperationCodes.RenouncingOwnership);
     }
 }
