@@ -140,7 +140,7 @@ contract ZeroCouponBonds is ERC1155, Ownable {
             uint40 balanceByIndex = uint40(balanceOf(msg.sender, bondIndex));
             uint40 burnCount = balanceByIndex >= redemptionCount ? redemptionCount : balanceByIndex;
 
-            _burn(msg.sender, bondIndex, redemptionCount);
+            _burn(msg.sender, bondIndex, burnCount);
             redemptionCount -= burnCount;
 
             if (isCapitulation && !isMature) {
